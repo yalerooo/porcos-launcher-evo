@@ -1,0 +1,47 @@
+[package]
+name = "porcoslauncherevo"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "porcoslauncherevo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.9.3", features = [] }
+tauri-plugin-opener = "2.5.2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.11", features = ["json", "stream", "multipart"] }
+tokio = { version = "1", features = ["full"] }
+xal = { git = "https://github.com/OpenXbox/xal-rs" }
+async-trait = "0.1"
+sha1 = "0.10"
+dirs = "5.0"
+rust-crypto = "0.2"
+# minecraft_launch_lib = "0.4" # Removed temporarily
+zip = "0.6"
+flate2 = "1.0"
+sysinfo = "0.30"
+thiserror = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+open = "5.0"
+uuid = { version = "1.4", features = ["v4", "fast-rng", "macro-diagnostics"] }
+futures = "0.3.31"
+unrar = "0.5.0"
+
+

@@ -1,0 +1,353 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.installModal {
+    background-color: #1a1a1a;
+    width: 100%;
+    max-width: 50rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    max-height: 85vh;
+}
+
+.header {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #121212;
+}
+
+.title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: white;
+    margin: 0;
+}
+
+.subtitle {
+    color: #a1a1aa;
+    font-size: 0.875rem;
+    margin: 0.25rem 0 0 0;
+}
+
+.closeButton {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    color: #9ca3af;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.closeButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+.errorBox {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #f87171;
+}
+
+.installingContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 0;
+    gap: 1.5rem;
+}
+
+.progressCircle {
+    position: relative;
+    width: 6rem;
+    height: 6rem;
+}
+
+.progressText {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: white;
+}
+
+.installStage {
+    text-align: center;
+}
+
+.stageTitle {
+    font-size: 1.125rem;
+    font-weight: 500;
+    color: white;
+    margin-bottom: 0.25rem;
+}
+
+.stageSubtitle {
+    color: #a1a1aa;
+    font-size: 0.875rem;
+}
+
+.loadingContainer {
+    display: flex;
+    justify-content: center;
+    padding: 3rem 0;
+}
+
+.spinner {
+    color: #ffbfba;
+    animation: spin 1s linear infinite;
+}
+
+.filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.filterGroup {
+    flex: 1;
+}
+
+.filterLabel {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #a1a1aa;
+    margin-bottom: 0.25rem;
+}
+
+.filterSelect {
+    width: 100%;
+    background-color: #27272a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    color: white;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.filterSelect:focus {
+    border-color: #ffbfba;
+}
+
+.versionList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+/* Custom Scrollbar */
+.versionList::-webkit-scrollbar {
+    width: 6px;
+}
+
+.versionList::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.versionList::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.versionList::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.emptyState {
+    text-align: center;
+    padding: 2rem 0;
+    color: #a1a1aa;
+}
+
+.versionCard {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: #27272a;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.versionCard:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background-color: #2e2e31;
+}
+
+.versionCardSelected {
+    background-color: rgba(255, 191, 186, 0.1);
+    border-color: #ffbfba;
+    box-shadow: 0 0 0 1px #ffbfba;
+}
+
+.versionName {
+    font-weight: bold;
+    color: white;
+    margin: 0;
+}
+
+.versionMeta {
+    font-size: 0.875rem;
+    color: #a1a1aa;
+    margin-top: 0.25rem;
+}
+
+.checkIcon {
+    color: #ffbfba;
+}
+
+.footer {
+    padding: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #121212;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.cancelButton {
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    color: #a1a1aa;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cancelButton:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.installButton {
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: bold;
+    background-color: #ffbfba;
+    color: #1a1a1a;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.installButton:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.installButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Success State */
+.successContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    text-align: center;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.successIconWrapper {
+    width: 5rem;
+    height: 5rem;
+    background-color: rgba(74, 222, 128, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.successIcon {
+    color: #4ade80;
+}
+
+.successTitle {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 0.5rem;
+}
+
+.successSubtitle {
+    color: #a1a1aa;
+    margin-bottom: 2rem;
+    font-size: 1rem;
+}
+
+.successButton {
+    padding: 0.75rem 2rem;
+    background-color: #27272a;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.successButton:hover {
+    background-color: #3f3f46;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
