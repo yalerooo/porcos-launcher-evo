@@ -2,6 +2,7 @@
   "name": "porcoslauncherevo",
   "private": true,
   "version": "0.1.0",
+  "author": "Porcos Team",
   "type": "module",
   "scripts": {
     "dev": "vite",

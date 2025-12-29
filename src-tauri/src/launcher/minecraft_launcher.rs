@@ -63,6 +63,12 @@ struct ProgressEvent {
     current: u64,
 }
 
+#[derive(Clone, Serialize)]
+struct CrashReportEvent {
+    path: String,
+    content: String,
+}
+
 pub struct MinecraftLauncher {
     minecraft_dir: PathBuf,
     window: Option<Window>,
@@ -72,6 +78,7 @@ pub struct MinecraftLauncher {
 impl MinecraftLauncher {
     pub fn new(minecraft_dir: PathBuf, window: Option<Window>) -> Self {
         let http_client = reqwest::Client::builder()
+            .user_agent("PorcosLauncher/1.0")
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .unwrap_or_default();
@@ -518,6 +525,8 @@ impl MinecraftLauncher {
         // Spawn a thread to monitor stdout
         if let Some(stdout) = child.stdout.take() {
             let window_clone = self.window.clone();
+            let minecraft_dir = self.minecraft_dir.clone();
+            
             std::thread::spawn(move || {
                 use std::io::{BufRead, BufReader};
                 let reader = BufReader::new(stdout);
@@ -543,6 +552,106 @@ impl MinecraftLauncher {
                         }
                         println!("[Game] {}", line);
                     }
+                }
+
+                // Wait for process to exit and check for crash
+                match child.wait() {
+                    Ok(status) => {
+                        println!("[MinecraftLauncher] Process finished. Exit code: {:?}", status.code());
+                        
+                        if !status.success() {
+                            println!("[MinecraftLauncher] Game exited with error. Checking for crash reports...");
+                            
+                            // Look for crash reports
+                            let crash_reports_dir = minecraft_dir.join("crash-reports");
+                            println!("[MinecraftLauncher] Checking directory: {:?}", crash_reports_dir);
+                            
+                            if crash_reports_dir.exists() {
+                                if let Ok(entries) = std::fs::read_dir(&crash_reports_dir) {
+                                    let mut reports: Vec<_> = entries
+                                        .filter_map(|e| e.ok())
+                                        .filter(|e| {
+                                            if let Ok(file_type) = e.file_type() {
+                                                file_type.is_file() && e.path().extension().map_or(false, |ext| ext == "txt")
+                                            } else {
+                                                false
+                                            }
+                                        })
+                                        .collect();
+                                    
+                                    println!("[MinecraftLauncher] Found {} potential crash report files.", reports.len());
+
+                                    // Sort by modification time (newest first)
+                                    reports.sort_by(|a, b| {
+                                        let a_time = a.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                                        let b_time = b.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                                        b_time.cmp(&a_time)
+                                    });
+
+                                    if let Some(latest) = reports.first() {
+                                        let report_path = latest.path();
+                                        println!("[MinecraftLauncher] Latest report file: {:?}", report_path);
+                                        
+                                        // Check if it's recent (e.g. within last 5 minutes)
+                                        if let Ok(metadata) = latest.metadata() {
+                                            if let Ok(modified) = metadata.modified() {
+                                                if let Ok(elapsed) = modified.elapsed() {
+                                                    println!("[MinecraftLauncher] File modified {:?} ago.", elapsed);
+                                                    if elapsed.as_secs() < 300 {
+                                                        println!("[MinecraftLauncher] Crash report is recent. Reading content...");
+                                                        // It's likely the crash report for this session
+                                                        if let Ok(content) = std::fs::read_to_string(&report_path) {
+                                                            let msg = format!("[Game] #@!@# Game crashed! Crash report saved to: #@!@# {}", report_path.to_string_lossy());
+                                                            if let Some(window) = &window_clone {
+                                                                let _ = window.emit("game-output", msg.clone());
+                                                                // let _ = window.emit("game-output", content.clone()); // Don't spam console with full report
+                                                                
+                                                                // Emit structured crash event
+                                                                println!("[MinecraftLauncher] Emitting game-crashed event to frontend...");
+                                                                let emit_result = window.emit("game-crashed", CrashReportEvent {
+                                                                    path: report_path.to_string_lossy().to_string(),
+                                                                    content: content.clone()
+                                                                });
+                                                                
+                                                                if let Err(e) = emit_result {
+                                                                    println!("[MinecraftLauncher] Failed to emit game-crashed: {}", e);
+                                                                } else {
+                                                                    println!("[MinecraftLauncher] game-crashed event emitted successfully.");
+                                                                }
+                                                            }
+                                                            println!("{}", msg);
+                                                        } else {
+                                                            println!("[MinecraftLauncher] Failed to read crash report content.");
+                                                        }
+                                                    } else {
+                                                        println!("[MinecraftLauncher] Crash report is too old (> 300s). Ignoring.");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        println!("[MinecraftLauncher] No crash reports found in directory.");
+                                    }
+                                } else {
+                                    println!("[MinecraftLauncher] Failed to read crash-reports directory.");
+                                }
+                            } else {
+                                println!("[MinecraftLauncher] crash-reports directory does not exist.");
+                            }
+                        }
+
+                        // Emit game exited event to ensure frontend state is reset
+                        if let Some(window) = &window_clone {
+                             println!("[MinecraftLauncher] Emitting game-exited event...");
+                             let _ = window.emit("game-exited", ());
+                        }
+                    },
+                    Err(e) => {
+                        println!("[MinecraftLauncher] Failed to wait for child process: {}", e);
+                        if let Some(window) = &window_clone {
+                             let _ = window.emit("game-exited", ());
+                        }
+                    },
                 }
             });
         }
@@ -947,19 +1056,24 @@ public class ForgeInstaller {
     }
 
     async fn download_file(&self, url: &str, path: &std::path::Path) -> Result<(), String> {
+        println!("[MinecraftLauncher] Downloading file: {}", url);
         let response = self.http_client.get(url)
             .send()
             .await
-            .map_err(|e| format!("Download failed: {}", e))?;
+            .map_err(|e| format!("Download failed (network): {}", e))?;
         
         if !response.status().is_success() {
-            return Err(format!("Download failed with status: {}", response.status()));
+            return Err(format!("Download failed with status: {} for URL: {}", response.status(), url));
         }
         
         let bytes = response.bytes()
             .await
             .map_err(|e| format!("Failed to read response: {}", e))?;
         
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+
         std::fs::write(path, &bytes)
             .map_err(|e| format!("Failed to write file: {}", e))?;
         

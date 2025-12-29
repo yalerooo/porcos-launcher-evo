@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check } from 'lucide-react';
+import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle, X } from 'lucide-react';
 import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
-import { join } from '@tauri-apps/api/path';
 import { cn } from '@/lib/utils';
 import styles from './Instances.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
@@ -49,9 +48,17 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
             newModLoader = complexVersionMatch[2];
             newModLoaderVersion = complexVersionMatch[3];
         } else {
-            // It's a simple version (Vanilla). 
-            newModLoader = undefined;
-            newModLoaderVersion = undefined;
+            // It's a simple version.
+            // Assume Vanilla if no suffix, unless it's the exact same string as current (which implies no change)
+            const currentVersionString = instance.selectedVersion || instance.version;
+            
+            if (version === currentVersionString) {
+                newModLoader = instance.modLoader;
+                newModLoaderVersion = instance.modLoaderVersion;
+            } else {
+                newModLoader = undefined;
+                newModLoaderVersion = undefined;
+            }
         }
 
         try {
@@ -75,8 +82,6 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
 
     useEffect(() => {
         let isMounted = true;
-        let iconObjUrl: string | null = null;
-        let bgObjUrl: string | null = null;
 
         const loadImages = async () => {
             const { invoke } = await import("@tauri-apps/api/core");
@@ -109,7 +114,7 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                             const data = await invoke("read_binary_file", { path: fullPath }) as number[];
                             const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
                             const url = URL.createObjectURL(blob);
-                            iconObjUrl = url;
+                            // iconObjUrl = url;
                             bgCache.set(cacheKey, url);
                             if (isMounted) setIconSrc(url);
                         } catch (e) {
@@ -146,7 +151,7 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                             const data = await invoke("read_binary_file", { path: fullPath }) as number[];
                             const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
                             const url = URL.createObjectURL(blob);
-                            bgObjUrl = url;
+                            // bgObjUrl = url;
                             bgCache.set(cacheKey, url);
                             if (isMounted) setBgSrc(url);
                         } catch (e) {
@@ -286,13 +291,18 @@ const Instances: React.FC = () => {
         addLog,
         memoryMin,
         memoryMax,
-        setSelectedInstance
+        setSelectedInstance,
+        consoleOutput,
+        setLaunchStartTime
     } = useLauncherStore();
     const { user } = useAuthStore();
 
     const [showCreateModal, setShowCreateModal] = React.useState(false);
     const [searchTerm, setSearchTerm] = React.useState('');
     const [viewingInstance, setViewingInstance] = React.useState<Instance | null>(null);
+    const [toastMessage, setToastMessage] = React.useState<string | null>(null);
+    const [toastType, setToastType] = React.useState<'success' | 'error'>('success');
+    const [showConsole, setShowConsole] = React.useState(false);
 
     React.useEffect(() => {
         loadData();
@@ -309,30 +319,91 @@ const Instances: React.FC = () => {
 
             const backendInstances = await invoke("get_instances") as Instance[];
             
+            // Map of local instances for quick lookup
+            const localMap = new Map(instances.map(i => [i.id, i]));
+
+            // MIGRATION: Fix legacy instances where modded versions are stored as simple strings
+            for (const inst of backendInstances) {
+                if (inst.modLoader && inst.versions) {
+                    const localInst = localMap.get(inst.id);
+                    const activeVer = localInst?.selectedVersion || inst.version;
+                    
+                    if (activeVer && !activeVer.includes('(')) {
+                            const complexVer = `${activeVer} (${inst.modLoader} ${inst.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
+                            
+                            if (inst.versions.includes(activeVer) && !inst.versions.includes(complexVer)) {
+                                const newVersions = inst.versions.map(v => v === activeVer ? complexVer : v);
+                                inst.versions = newVersions;
+                                await invoke("update_instance", {
+                                    id: inst.id,
+                                    versions: newVersions
+                                });
+                            }
+                    }
+                }
+            }
+            
             // Merge with existing order to preserve drag-and-drop changes
             const backendMap = new Map(backendInstances.map(i => [i.id, i]));
             const newOrderedInstances: Instance[] = [];
             
             // 1. Keep existing instances in order
-            instances.forEach(inst => {
-                if (backendMap.has(inst.id)) {
-                    newOrderedInstances.push(backendMap.get(inst.id)!);
-                    backendMap.delete(inst.id);
+            instances.forEach(localInst => {
+                if (backendMap.has(localInst.id)) {
+                    const fresh = backendMap.get(localInst.id)!;
+                    
+                    let selVer = localInst.selectedVersion || fresh.version;
+                    if (fresh.modLoader && selVer && !selVer.includes('(')) {
+                            const potentialComplex = `${selVer} (${fresh.modLoader} ${fresh.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
+                            if (fresh.versions?.includes(potentialComplex)) {
+                                selVer = potentialComplex;
+                            }
+                    }
+
+                    newOrderedInstances.push({
+                        ...fresh,
+                        selectedVersion: selVer
+                    });
+                    backendMap.delete(localInst.id);
                 }
             });
             
             // 2. Add new instances (created externally or not in local store yet)
             backendMap.forEach(inst => {
-                newOrderedInstances.push(inst);
+                let selVer = inst.version;
+                if (inst.modLoader && !selVer.includes('(')) {
+                    const complex = `${selVer} (${inst.modLoader} ${inst.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
+                    if (inst.versions?.includes(complex)) {
+                        selVer = complex;
+                    }
+                }
+                newOrderedInstances.push({
+                    ...inst,
+                    selectedVersion: selVer
+                });
             });
 
             setInstances(newOrderedInstances);
+
+            // Sync selectedInstance if it exists and was migrated
+            const currentSelected = useLauncherStore.getState().selectedInstance;
+            if (currentSelected) {
+                const updated = newOrderedInstances.find(i => i.id === currentSelected.id);
+                if (updated && (
+                    updated.selectedVersion !== currentSelected.selectedVersion || 
+                    JSON.stringify(updated.versions) !== JSON.stringify(currentSelected.versions)
+                )) {
+                    setSelectedInstance(updated);
+                }
+            }
+
         } catch (error) {
             console.error("Failed to load data:", error);
         }
     };
 
     const [instanceToDelete, setInstanceToDelete] = React.useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = React.useState(false);
 
     const handleDeleteInstance = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
@@ -341,15 +412,28 @@ const Instances: React.FC = () => {
 
     const confirmDelete = async () => {
         if (!instanceToDelete) return;
+        setIsDeleting(true);
         try {
             const { invoke } = await import("@tauri-apps/api/core");
             await invoke("delete_instance", { id: instanceToDelete });
             removeInstance(instanceToDelete);
             setInstanceToDelete(null);
+            setToastType('success');
+            setToastMessage("Instancia eliminada correctamente");
+            setTimeout(() => setToastMessage(null), 3000);
         } catch (error) {
             console.error("Failed to delete instance:", error);
+            setToastType('error');
+            setToastMessage(`Error al eliminar: ${error}`);
+            setTimeout(() => setToastMessage(null), 5000);
+        } finally {
+            setIsDeleting(false);
         }
     };
+
+    const filteredInstances = instances.filter(instance => 
+        instance.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const handlePlayInstance = async (e: React.MouseEvent, instance: Instance) => {
         e.stopPropagation();
@@ -357,6 +441,7 @@ const Instances: React.FC = () => {
 
         setSelectedInstance(instance);
         setIsLaunching(true);
+        setLaunchStartTime(Date.now());
         addLog(`Launching instance: ${instance.name} (${instance.version})...`);
 
         try {
@@ -397,24 +482,26 @@ const Instances: React.FC = () => {
         } catch (error) {
             console.error("Launch failed:", error);
             addLog(`Launch failed: ${error}`);
-        } finally {
+            setToastType('error');
+            setToastMessage(typeof error === 'string' ? error : "Error al iniciar el juego");
+            setTimeout(() => setToastMessage(null), 5000);
             setIsLaunching(false);
+            setLaunchStartTime(null);
+        } finally {
+            // setIsLaunching(false); // Don't reset here, wait for game exit
         }
     };
 
-    const filteredInstances = instances.filter(i => 
-        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        i.version.includes(searchTerm)
-    );
-
     if (viewingInstance) {
         return (
-            <InstanceDetails 
-                instance={viewingInstance} 
-                onBack={() => setViewingInstance(null)}
-                onPlay={handlePlayInstance}
-                isLaunching={isLaunching}
-            />
+            <>
+                <InstanceDetails 
+                    instance={viewingInstance} 
+                    onBack={() => setViewingInstance(null)}
+                    onPlay={handlePlayInstance}
+                    isLaunching={isLaunching}
+                />
+            </>
         );
     }
 
@@ -427,17 +514,43 @@ const Instances: React.FC = () => {
                     <p className={styles.subtitle}>Gestiona y juega tus modpacks favoritos</p>
                 </div>
                 
-                <div className={styles.searchWrapper}>
-                    <input 
-                        type="text" 
-                        placeholder="Buscar..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className={styles.searchInput}
-                    />
-                    <Search className={styles.searchIcon} size={18} />
+                <div className="flex items-center gap-4">
+                    <button 
+                        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                        onClick={() => setShowConsole(!showConsole)}
+                    >
+                        {showConsole ? 'Hide Logs' : 'Show Logs'}
+                    </button>
+                    <div className={styles.searchWrapper}>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className={styles.searchInput}
+                        />
+                        <Search className={styles.searchIcon} size={18} />
+                    </div>
                 </div>
             </div>
+
+            {/* Console Overlay */}
+            {showConsole && (
+                <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/90 border-t border-white/10 z-50 overflow-hidden flex flex-col font-mono text-xs">
+                    <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
+                        <span className="text-zinc-400">Launcher Logs</span>
+                        <button onClick={() => setShowConsole(false)} className="text-zinc-500 hover:text-white">
+                            <X size={14} />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-1">
+                        {consoleOutput.map((log, i) => (
+                            <div key={i} className="text-zinc-300 break-all whitespace-pre-wrap">{log}</div>
+                        ))}
+                        <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
+                    </div>
+                </div>
+            )}
 
             {/* Content */}
             <div className={styles.content}>
@@ -514,13 +627,38 @@ const Instances: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={confirmDelete}
-                                        className={styles.confirmDeleteButton}
+                                        disabled={isDeleting}
+                                        className={cn(styles.confirmDeleteButton, "flex items-center justify-center gap-2")}
                                     >
-                                        Eliminar
+                                        {isDeleting ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                                Eliminando...
+                                            </>
+                                        ) : (
+                                            "Eliminar"
+                                        )}
                                     </button>
                                 </div>
                             </div>
                         </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            {/* Toast Notification */}
+            <AnimatePresence>
+                {toastMessage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 50 }}
+                        className={cn(
+                            "fixed bottom-10 left-1/2 -translate-x-1/2 bg-[#1a1a1a] border px-6 py-3 rounded-xl shadow-2xl z-[100] flex items-center gap-3",
+                            toastType === 'error' ? "border-red-500/50 text-red-200" : "border-white/10 text-white"
+                        )}
+                    >
+                        {toastType === 'error' ? <AlertCircle size={20} className="text-red-500" /> : <Check size={20} className="text-green-400" />}
+                        <span className="font-medium">{toastMessage}</span>
                     </motion.div>
                 )}
             </AnimatePresence>

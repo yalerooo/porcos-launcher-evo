@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Copy, Check, User, ArrowLeft, Play } from 'lucide-react';
-import { cn } from '@/lib/utils';
+
 import { useAuthStore } from '@/stores/authStore';
 import TitleBar from '@/components/TitleBar';
 

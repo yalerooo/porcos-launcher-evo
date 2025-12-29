@@ -261,8 +261,8 @@
 }
 
 .settingsHeader {
-    height: 100px;
-    padding: 0 60px;
+    height: 120px;
+    padding: 40px 60px 0;
     display: flex;
     align-items: center;
     justify-content: flex-start;

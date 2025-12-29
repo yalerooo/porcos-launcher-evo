@@ -9,12 +9,14 @@
 
 .header {
     padding: 40px 60px 0 60px;
+    position: relative;
+    z-index: 10;
 }
 
 .content {
     flex: 1;
     padding: 40px 60px;
-    background-color: transparent; /* Removed background */
+    background-color: transparent;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -26,21 +28,21 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: transparent; /* Removed background */
-    border-radius: 0; /* Removed border radius */
-    border: none; /* Removed border */
+    background-color: transparent;
+    border-radius: 0;
+    border: none;
     overflow: hidden;
     width: 100%;
     min-height: 0;
 }
 
 .searchBar {
-    padding: 0 0 1.5rem 0; /* Adjusted padding */
-    border-bottom: none; /* Removed border */
+    padding: 0 0 1.5rem 0;
+    border-bottom: none;
     display: flex;
     align-items: center;
     gap: 1rem;
-    background-color: transparent; /* Removed background */
+    background-color: transparent;
     flex-shrink: 0;
 }
 
@@ -93,11 +95,11 @@
 
 .filesList {
     flex: 1 1 0;
-    padding: 0; /* Removed padding */
+    padding: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem; /* Increased gap */
+    gap: 0.75rem;
 }
 
 /* Custom Scrollbar - Matching Global Style */
@@ -125,21 +127,21 @@
     gap: 1rem;
     padding: 1rem;
     border-radius: 0.75rem;
-    background-color: #18181b; /* Darker card background */
+    background-color: #18181b;
     border: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.2s;
 }
 
 .fileItem:hover {
     border-color: rgba(255, 191, 186, 0.3);
-    background-color: #202023; /* Lighter on hover */
+    background-color: #202023;
 }
 
 .fileIcon {
     width: 4rem;
     height: 4rem;
     border-radius: 0.75rem;
-    background-color: #27272a; /* Adjusted icon bg */
+    background-color: #27272a;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -216,9 +218,9 @@
     align-items: center;
     justify-content: center;
     gap: 1rem;
-    padding: 1.5rem 0 0 0; /* Adjusted padding */
-    border-top: none; /* Removed border */
-    background-color: transparent; /* Removed background */
+    padding: 1.5rem 0 0 0;
+    border-top: none;
+    background-color: transparent;
 }
 
 .pageButton {
@@ -624,3 +626,179 @@
     transform: translateY(-2px);
 }
 
+.menuContainer {
+    position: relative;
+}
+
+/* Dropdown Menu */
+.menuDropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    background-color: #27272a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    padding: 0.5rem;
+    min-width: 12rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    animation: fadeIn 0.1s ease-out;
+}
+
+.menuItem {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    color: #d4d4d8;
+    font-size: 0.875rem;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.menuItem:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+
+.menuItemDelete {
+    color: #f87171;
+}
+
+.menuItemDelete:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+/* Modal Styles */
+.modalOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    animation: fadeIn 0.2s ease-out;
+    backdrop-filter: blur(4px);
+}
+
+.modalContent {
+    background-color: #18181b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 28rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.2s ease-out;
+}
+
+.modalHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.modalTitle {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: white;
+    margin: 0;
+}
+
+.modalClose {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    color: #a1a1aa;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.modalClose:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.modalBody {
+    margin-bottom: 1.5rem;
+}
+
+.modalInput {
+    width: 100%;
+    background-color: #27272a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: white;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.modalInput:focus {
+    border-color: #ffbfba;
+}
+
+.modalText {
+    color: #a1a1aa;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.modalFooter {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.modalButton {
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.modalButtonCancel {
+    background-color: transparent;
+    color: #a1a1aa;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modalButtonCancel:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+
+.modalButtonPrimary {
+    background-color: #ffbfba;
+    color: #1a1a1a;
+}
+
+.modalButtonPrimary:hover {
+    background-color: #ffcfcb;
+}
+
+.modalButtonDanger {
+    background-color: #ef4444;
+    color: white;
+}
+
+.modalButtonDanger:hover {
+    background-color: #dc2626;
+}

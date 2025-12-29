@@ -124,6 +124,9 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                         break;
                 }
 
+                // Reverse to show newest first
+                versions = versions.reverse();
+
                 setAvailableModLoaderVersions(versions);
                 if (versions.length > 0) {
                     // Default to the first stable version if possible, or just the first one
@@ -206,6 +209,8 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
             } else {
                 newInstance.versions = [newInstanceVersion];
                 newInstance.selectedVersion = newInstanceVersion;
+                newInstance.modLoader = undefined;
+                newInstance.modLoaderVersion = undefined;
             }
 
             // Create instance_info.json for robustness

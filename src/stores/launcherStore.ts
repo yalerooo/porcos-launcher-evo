@@ -24,7 +24,9 @@ interface LauncherState {
     isLaunching: boolean;
     launchStage: string;
     launchProgress: number;
+    launchStartTime: number | null;
     consoleOutput: string[];
+    crashReport: { path: string, content: string } | null;
     
     setVersions: (versions: any[]) => void;
     setInstances: (instances: Instance[]) => void;
@@ -38,8 +40,10 @@ interface LauncherState {
     setIsLaunching: (isLaunching: boolean) => void;
     setLaunchStage: (stage: string) => void;
     setLaunchProgress: (progress: number) => void;
+    setLaunchStartTime: (time: number | null) => void;
     addLog: (message: string) => void;
     clearLogs: () => void;
+    setCrashReport: (report: { path: string, content: string } | null) => void;
 }
 
 export const useLauncherStore = create<LauncherState>()(
@@ -54,7 +58,9 @@ export const useLauncherStore = create<LauncherState>()(
             isLaunching: false,
             launchStage: '',
             launchProgress: 0,
+            launchStartTime: null,
             consoleOutput: [],
+            crashReport: null,
 
             setVersions: (versions) => set({ versions }),
             setInstances: (instances) => set({ instances }),
@@ -77,10 +83,12 @@ export const useLauncherStore = create<LauncherState>()(
             setIsLaunching: (isLaunching) => set({ isLaunching }),
             setLaunchStage: (launchStage) => set({ launchStage }),
             setLaunchProgress: (launchProgress) => set({ launchProgress }),
+            setLaunchStartTime: (launchStartTime) => set({ launchStartTime }),
             addLog: (message) => set((state) => ({ 
                 consoleOutput: [...state.consoleOutput, `[${new Date().toLocaleTimeString()}] ${message}`] 
             })),
             clearLogs: () => set({ consoleOutput: [] }),
+            setCrashReport: (crashReport) => set({ crashReport }),
         }),
         {
             name: 'launcher-storage',
@@ -89,7 +97,9 @@ export const useLauncherStore = create<LauncherState>()(
                 selectedInstance: state.selectedInstance,
                 selectedVersion: state.selectedVersion,
                 memoryMin: state.memoryMin,
-                memoryMax: state.memoryMax
+                memoryMax: state.memoryMax,
+                crashReport: state.crashReport,
+                launchStartTime: state.launchStartTime
             }),
         }
     )

@@ -16,6 +16,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .manage(Mutex::new(SetupState {
             frontend_task: false,
             backend_task: false,
@@ -76,19 +77,27 @@ async fn set_complete(
             let _ = splash_window.close();
         }
         if let Some(main_window) = app.get_webview_window("main") {
-            // Set window size to 60% of the screen
+            // Calculate 70% of the screen size
             if let Ok(Some(monitor)) = main_window.current_monitor() {
                 let screen_size = monitor.size();
-                let width = (screen_size.width as f64 * 0.6) as u32;
-                let height = (screen_size.height as f64 * 0.7) as u32;
+                let width = (screen_size.width as f64 * 0.60) as u32;
+                let height = (screen_size.height as f64 * 0.70) as u32;
                 
                 let _ = main_window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
                     width,
                     height,
                 }));
-                let _ = main_window.center();
+            } else {
+                // Fallback if monitor detection fails
+                let _ = main_window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                    width: 1280,
+                    height: 800,
+                }));
             }
+            let _ = main_window.center();
+            
             let _ = main_window.show();
+            let _ = main_window.set_focus();
         }
     }
     Ok(())

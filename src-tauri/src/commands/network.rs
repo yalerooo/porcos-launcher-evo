@@ -6,6 +6,12 @@ use std::io::Write;
 use std::path::Path;
 use futures::StreamExt;
 
+#[derive(Clone, serde::Serialize)]
+struct DownloadProgress {
+    id: Option<String>,
+    progress: f64,
+}
+
 #[command]
 pub async fn fetch_cors(url: String, headers: Option<HashMap<String, String>>) -> Result<String, String> {
     let client = Client::new();
@@ -29,7 +35,7 @@ pub async fn fetch_cors(url: String, headers: Option<HashMap<String, String>>) -
 }
 
 #[command]
-pub async fn download_file(window: Window, url: String, path: String) -> Result<(), String> {
+pub async fn download_file(window: Window, url: String, path: String, id: Option<String>) -> Result<(), String> {
     let client = Client::new();
     let response = client.get(&url).send().await.map_err(|e| e.to_string())?;
     
@@ -58,14 +64,16 @@ pub async fn download_file(window: Window, url: String, path: String) -> Result<
             let progress = (downloaded as f64 / total_size as f64) * 100.0;
             // Emit every 1% or so to avoid flooding
             if progress as u64 > last_emit {
-                window.emit("download-progress", progress).map_err(|e| e.to_string())?;
+                let payload = DownloadProgress { id: id.clone(), progress };
+                window.emit("download-progress", payload).map_err(|e| e.to_string())?;
                 last_emit = progress as u64;
             }
         }
     }
     
     // Ensure 100% is emitted
-    window.emit("download-progress", 100.0).map_err(|e| e.to_string())?;
+    let payload = DownloadProgress { id: id.clone(), progress: 100.0 };
+    window.emit("download-progress", payload).map_err(|e| e.to_string())?;
     
     Ok(())
 }

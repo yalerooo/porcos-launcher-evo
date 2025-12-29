@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Download, User, Loader2, Check, Plus, X } from 'lucide-react';
+import { ArrowLeft, Download, User, Loader2, Check, Plus, X, ChevronDown } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -11,11 +11,13 @@ import styles from './ModDetailsView.module.css';
 interface ModDetailsViewProps {
     item: any;
     onBack: () => void;
-    onInstall: (item: any) => void;
+    onInstall: (item: any, version?: any) => void;
     isInstalling: boolean;
     isInstalled: boolean;
     hasUpdate?: boolean;
-    type: 'mods' | 'modpacks';
+    type: 'mods' | 'modpacks' | 'updates';
+    gameVersion?: string;
+    loader?: string;
 }
 
 const ModDetailsView: React.FC<ModDetailsViewProps> = ({ 
@@ -25,7 +27,9 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
     isInstalling, 
     isInstalled,
     hasUpdate = false,
-    type
+    type,
+    gameVersion,
+    loader
 }) => {
     const [details, setDetails] = useState<any>(null);
     const [loading, setLoading] = useState(false);
@@ -33,11 +37,117 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
     const [gallery, setGallery] = useState<string[]>([]);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+    // Version Selection
+    const [versions, setVersions] = useState<any[]>([]);
+    const [selectedVersion, setSelectedVersion] = useState<any>(null);
+    const [loadingVersions, setLoadingVersions] = useState(false);
+    const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsVersionDropdownOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
     useEffect(() => {
         if (item) {
             loadDetails();
+            if (type === 'mods') {
+                loadVersions();
+            }
         }
     }, [item]);
+
+    const loadVersions = async () => {
+        setLoadingVersions(true);
+        try {
+            if (item.source === 'modrinth') {
+                const url = `https://api.modrinth.com/v2/project/${item.id}/version`;
+                const responseText = await invoke('fetch_cors', { url }) as string;
+                const data = JSON.parse(responseText);
+                
+                // Filter and map
+                const mappedVersions = data.map((v: any) => ({
+                    id: v.id,
+                    name: v.version_number,
+                    type: v.version_type,
+                    gameVersions: v.game_versions,
+                    loaders: v.loaders,
+                    date: new Date(v.date_published).toLocaleDateString(),
+                    original: v
+                }));
+
+                setVersions(mappedVersions);
+
+                // Auto-select compatible version
+                if (gameVersion) {
+                    const compatible = mappedVersions.find((v: any) => {
+                        const matchesGame = v.gameVersions.includes(gameVersion);
+                        const matchesLoader = loader ? v.loaders.includes(loader.toLowerCase()) : true;
+                        return matchesGame && matchesLoader;
+                    });
+                    if (compatible) setSelectedVersion(compatible);
+                    else if (mappedVersions.length > 0) setSelectedVersion(mappedVersions[0]);
+                } else if (mappedVersions.length > 0) {
+                    setSelectedVersion(mappedVersions[0]);
+                }
+
+            } else if (item.source === 'curseforge') {
+                const url = `https://api.curseforge.com/v1/mods/${item.id}/files`;
+                const responseText = await invoke('fetch_cors', { 
+                    url,
+                    headers: {
+                        'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
+                        'Accept': 'application/json'
+                    }
+                }) as string;
+                const data = JSON.parse(responseText);
+                
+                const mappedVersions = data.data.map((f: any) => ({
+                    id: f.id,
+                    name: f.displayName,
+                    type: f.releaseType === 1 ? 'release' : f.releaseType === 2 ? 'beta' : 'alpha',
+                    gameVersions: f.gameVersions,
+                    loaders: [], // CF doesn't always make this easy to parse from just the file object without checking gameVersions strings
+                    date: new Date(f.fileDate).toLocaleDateString(),
+                    original: f
+                }));
+
+                setVersions(mappedVersions);
+
+                // Auto-select compatible
+                if (gameVersion) {
+                    const compatible = mappedVersions.find((v: any) => {
+                        const matchesGame = v.gameVersions.includes(gameVersion);
+                        // Loader check for CF is tricky, usually embedded in gameVersions or we assume compatibility if not specified
+                        let matchesLoader = true;
+                        if (loader) {
+                            const loaderName = loader.toLowerCase();
+                            // CF puts loaders in gameVersions too (e.g. "Forge", "Fabric")
+                            matchesLoader = v.gameVersions.some((gv: string) => gv.toLowerCase() === loaderName);
+                        }
+                        return matchesGame && matchesLoader;
+                    });
+                    if (compatible) setSelectedVersion(compatible);
+                    else if (mappedVersions.length > 0) setSelectedVersion(mappedVersions[0]);
+                } else if (mappedVersions.length > 0) {
+                    setSelectedVersion(mappedVersions[0]);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load versions", e);
+        } finally {
+            setLoadingVersions(false);
+        }
+    };
 
     const loadDetails = async () => {
         setLoading(true);
@@ -126,12 +236,53 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                         )}
                         
                         <div className={styles.actions}>
+                            {/* Version Selector */}
+                            {type === 'mods' && versions.length > 0 && (
+                                <div className="relative" ref={dropdownRef}>
+                                    <button 
+                                        className={styles.versionSelector}
+                                        onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
+                                        disabled={loadingVersions}
+                                    >
+                                        <span className="truncate max-w-[150px]">
+                                            {loadingVersions ? "Cargando..." : selectedVersion ? selectedVersion.name : "Seleccionar versión"}
+                                        </span>
+                                        <ChevronDown size={16} />
+                                    </button>
+
+                                    {isVersionDropdownOpen && (
+                                        <div className={styles.versionDropdown}>
+                                            {versions.map((v) => (
+                                                <button
+                                                    key={v.id}
+                                                    className={cn(
+                                                        styles.versionOption,
+                                                        selectedVersion?.id === v.id && styles.versionOptionActive
+                                                    )}
+                                                    onClick={() => {
+                                                        setSelectedVersion(v);
+                                                        setIsVersionDropdownOpen(false);
+                                                    }}
+                                                >
+                                                    <div className="flex flex-col items-start">
+                                                        <span className="font-medium truncate w-full">{v.name}</span>
+                                                        <span className="text-xs opacity-60">
+                                                            {v.gameVersions.join(', ')} • {v.date}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <button 
-                                onClick={() => onInstall(item)}
-                                disabled={isInstalling || (isInstalled && !hasUpdate && type === 'mods')}
+                                onClick={() => onInstall(item, selectedVersion)}
+                                disabled={isInstalling || (isInstalled && !hasUpdate && type === 'mods' && !selectedVersion)}
                                 className={cn(
                                     styles.installButton,
-                                    isInstalled && !hasUpdate && type === 'mods' && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
+                                    isInstalled && !hasUpdate && type === 'mods' && !selectedVersion && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
                                     isInstalled && hasUpdate && type === 'mods' && "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30"
                                 )}
                             >
@@ -145,7 +296,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                                         <Plus size={20} />
                                         Crear Instancia
                                     </>
-                                ) : isInstalled ? (
+                                ) : isInstalled && !selectedVersion ? (
                                     hasUpdate ? (
                                         <>
                                             <Download size={20} />
@@ -160,7 +311,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                                 ) : (
                                     <>
                                         <Download size={20} />
-                                        Instalar
+                                        {selectedVersion ? "Instalar Versión" : "Instalar"}
                                     </>
                                 )}
                             </button>

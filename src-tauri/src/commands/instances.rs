@@ -130,8 +130,31 @@ pub async fn delete_instance(id: String) -> Result<(), String> {
     let instances_dir = get_instances_dir();
     let instance_dir = instances_dir.join(&id);
 
-    if instance_dir.exists() {
-        fs::remove_dir_all(instance_dir).map_err(|e| format!("Failed to delete instance: {}", e))?;
+    if !instance_dir.exists() {
+        return Ok(());
+    }
+
+    // 1. Try to rename to a temporary "trash" folder first.
+    // This effectively "hides" the instance immediately and checks for some locks.
+    let trash_name = format!(".trash_{}", id);
+    let trash_path = instances_dir.join(&trash_name);
+
+    // Clean up any previous failed trash attempt
+    if trash_path.exists() {
+        let _ = fs::remove_dir_all(&trash_path);
+    }
+
+    // Attempt rename
+    match fs::rename(&instance_dir, &trash_path) {
+        Ok(_) => {
+            // Rename succeeded, now delete the trash folder
+            fs::remove_dir_all(&trash_path).map_err(|e| format!("Instance removed from list, but failed to clean up files: {}", e))?;
+        }
+        Err(e) => {
+            // Rename failed (maybe cross-device link or locked), try direct delete
+            println!("Rename failed ({}), trying direct delete...", e);
+            fs::remove_dir_all(&instance_dir).map_err(|e| format!("Failed to delete instance. Is it running? Error: {}", e))?;
+        }
     }
 
     Ok(())
@@ -174,10 +197,51 @@ pub async fn update_instance(id: String, name: Option<String>, version: Option<S
     if let Some(vs) = versions { instance.versions = Some(vs); }
     if let Some(ml) = mod_loader { instance.mod_loader = Some(ml); }
     if let Some(mlv) = mod_loader_version { instance.mod_loader_version = Some(mlv); }
-    // Allow clearing icon/bg if empty string passed? Or just update if Some.
-    // For now assume we only set new values.
-    if let Some(i) = icon { instance.icon = Some(i); }
-    if let Some(b) = background_image { instance.background_image = Some(b); }
+    
+    // Handle Icon
+    if let Some(i) = icon {
+        let icon_path = PathBuf::from(&i);
+        if icon_path.exists() && icon_path.is_absolute() {
+             if let Some(ext) = icon_path.extension() {
+                let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+                let new_filename = format!("icon_{}.{}", timestamp, ext.to_string_lossy());
+                let dest_path = instance_dir.join(&new_filename);
+                if let Err(e) = fs::copy(&icon_path, &dest_path) {
+                    println!("Failed to copy icon: {}", e);
+                    instance.icon = Some(i);
+                } else {
+                    instance.icon = Some(new_filename);
+                }
+            } else {
+                instance.icon = Some(i);
+            }
+        } else {
+            instance.icon = Some(i);
+        }
+    }
+
+    // Handle Background Image
+    if let Some(b) = background_image {
+        let bg_path = PathBuf::from(&b);
+        if bg_path.exists() && bg_path.is_absolute() {
+            if let Some(ext) = bg_path.extension() {
+                let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+                let new_filename = format!("background_{}.{}", timestamp, ext.to_string_lossy());
+                let dest_path = instance_dir.join(&new_filename);
+                
+                if let Err(e) = fs::copy(&bg_path, &dest_path) {
+                    println!("Failed to copy background image: {}", e);
+                    instance.background_image = Some(b);
+                } else {
+                    instance.background_image = Some(new_filename);
+                }
+            } else {
+                instance.background_image = Some(b);
+            }
+        } else {
+            instance.background_image = Some(b);
+        }
+    }
 
     let config_json = serde_json::to_string_pretty(&instance)
         .map_err(|e| format!("Failed to serialize instance config: {}", e))?;

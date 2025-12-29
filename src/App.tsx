@@ -1,12 +1,10 @@
 import MainLayout from '@/layouts/MainLayout';
 import Login from '@/pages/Login';
 import Home from '@/pages/Home';
-import Dashboard from '@/pages/Dashboard';
 import Settings from '@/pages/Settings';
 import Console from '@/pages/Console';
 import Instances from '@/pages/Instances';
 import Mods from '@/pages/Mods';
-import TitleBar from '@/components/TitleBar';
 import React from 'react';
 import { useAuthStore } from '@/stores/authStore';
 

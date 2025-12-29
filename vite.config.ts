@@ -15,4 +15,12 @@ export default defineConfig({
     strictPort: true,
     host: true,
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        splashscreen: path.resolve(__dirname, 'splashscreen.html'),
+      },
+    },
+  },
 });

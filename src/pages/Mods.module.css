@@ -299,6 +299,12 @@
     .contentArea {
         grid-template-columns: 16rem minmax(0, 1fr);
     }
+    .contentAreaFull {
+        grid-template-columns: 1fr !important;
+    }
+    .fullWidth {
+        grid-column: 1 !important;
+    }
     .sidebar {
         display: block;
     }

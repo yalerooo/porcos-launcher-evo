@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Settings, Plus, Image as ImageIcon, X, Trash2, Check, Play, Cpu, Gamepad2, ChevronDown, ArrowLeft, Package, Download } from 'lucide-react';
+import { Box, Settings, Plus, Image as ImageIcon, X, Trash2, Check, Play, Cpu, Gamepad2, ChevronDown, ArrowLeft, Package, Download, AlertCircle, Upload } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
+import { open } from '@tauri-apps/plugin-dialog';
+
 import styles from './Home.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 
@@ -106,7 +108,8 @@ const Home: React.FC = () => {
         instances, selectedInstance, isLaunching, setIsLaunching, addLog, 
         memoryMin, memoryMax, setSelectedInstance, updateInstance,
         launchStage, launchProgress, setLaunchStage, setLaunchProgress,
-        removeInstance, versions, setVersions, setInstances
+        removeInstance, versions, setVersions, setInstances,
+        setLaunchStartTime
     } = useLauncherStore();
     const { user } = useAuthStore();
     const [showBackgroundSelector, setShowBackgroundSelector] = useState(false);
@@ -117,7 +120,9 @@ const Home: React.FC = () => {
     const [isVersionSelectOpen, setIsVersionSelectOpen] = useState(false);
     const [isMainVersionDropdownOpen, setIsMainVersionDropdownOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [toastType, setToastType] = useState<'success' | 'error'>('success');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
     
     // Create Instance State
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -204,8 +209,7 @@ const Home: React.FC = () => {
     // Porcos Metadata State
     const [porcosMetadata, setPorcosMetadata] = useState<any>(null);
     const [updateAvailable, setUpdateAvailable] = useState<any>(null);
-    const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-    const [isUpdating, setIsUpdating] = useState(false);
+
 
     useEffect(() => {
         const checkPorcos = async () => {
@@ -231,7 +235,6 @@ const Home: React.FC = () => {
                     
                     // Check for updates
                     if (data.updateUrl) {
-                        setIsCheckingUpdate(true);
                         try {
                             const responseText = await invoke('fetch_cors', { url: data.updateUrl }) as string;
                             const remoteData = JSON.parse(responseText);
@@ -251,8 +254,6 @@ const Home: React.FC = () => {
                             }
                         } catch (e) {
                             console.error("Failed to check for updates", e);
-                        } finally {
-                            setIsCheckingUpdate(false);
                         }
                     }
                 }
@@ -267,7 +268,6 @@ const Home: React.FC = () => {
     const handleUpdateInstance = async () => {
         if (!activeInstance || !porcosMetadata || !updateAvailable) return;
         
-        setIsUpdating(true);
         setLaunchStage("Iniciando actualización...");
         setLaunchProgress(0);
         setIsLaunching(true); // Reuse launching UI for progress
@@ -319,18 +319,26 @@ const Home: React.FC = () => {
                         if (update.downloadUrl5) downloadUrls.push(update.downloadUrl5);
                         
                         const zipPaths = [];
-                        for (let i = 0; i < downloadUrls.length; i++) {
-                            const url = downloadUrls[i];
+                        setLaunchStage(`Descargando v${update.version} (${downloadUrls.length} partes)...`);
+                        
+                        let completedBatch = 0;
+                        const downloadPromises = downloadUrls.map(async (url, i) => {
                             const fileName = url.split('/').pop() || `update_${update.version}_${i}.zip`;
                             const filePath = await join(tempDir, fileName);
-                            
-                            setLaunchStage(`Descargando v${update.version} (Parte ${i+1}/${downloadUrls.length})...`);
                             await invoke('download_file', { url, path: filePath });
-                            zipPaths.push(filePath);
                             
-                            currentStep++;
-                            setLaunchProgress((currentStep / totalSteps) * 100);
-                        }
+                            completedBatch++;
+                            setLaunchProgress(((currentStep + completedBatch) / totalSteps) * 100);
+                            setLaunchStage(`Descargando v${update.version} (${completedBatch}/${downloadUrls.length})...`);
+                            
+                            return filePath;
+                        });
+                        
+                        const paths = await Promise.all(downloadPromises);
+                        zipPaths.push(...paths);
+                        
+                        currentStep += downloadUrls.length;
+                        // setLaunchProgress((currentStep / totalSteps) * 100); // Already updated in loop
                         
                         // Extract
                         setLaunchStage(`Instalando v${update.version}...`);
@@ -414,7 +422,6 @@ const Home: React.FC = () => {
                     setUpdateAvailable(null); // No more updates
                     setTimeout(() => {
                         setIsLaunching(false);
-                        setIsUpdating(false);
                     }, 2000);
                 }
             }
@@ -423,7 +430,6 @@ const Home: React.FC = () => {
             setLaunchStage("Error en la actualización");
             setTimeout(() => {
                 setIsLaunching(false);
-                setIsUpdating(false);
             }, 2000);
         }
     };
@@ -471,6 +477,24 @@ const Home: React.FC = () => {
 
 
 
+    const handleSelectCustomBackground = async () => {
+        try {
+            const file = await open({
+                multiple: false,
+                filters: [{
+                    name: 'Image',
+                    extensions: ['png', 'jpg', 'jpeg', 'webp']
+                }]
+            });
+            
+            if (file) {
+                handleUpdateBackground(file as string);
+            }
+        } catch (err) {
+            console.error("Failed to select image:", err);
+        }
+    };
+
     const handleUpdateBackground = async (filename: string) => {
         if (activeInstance) {
             try {
@@ -515,6 +539,7 @@ const Home: React.FC = () => {
 
     const confirmDeleteInstance = async () => {
         if (!activeInstance) return;
+        setIsDeleting(true);
         
         try {
             const { invoke } = await import("@tauri-apps/api/core");
@@ -523,8 +548,16 @@ const Home: React.FC = () => {
             setSelectedInstance(null);
             setShowSettingsModal(false);
             setShowDeleteConfirm(false);
+            setToastType('success');
+            setToastMessage("Instancia eliminada correctamente");
+            setTimeout(() => setToastMessage(null), 3000);
         } catch (e) {
             console.error("Failed to delete instance", e);
+            setToastType('error');
+            setToastMessage(`Error al eliminar: ${e}`);
+            setTimeout(() => setToastMessage(null), 5000);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -538,7 +571,24 @@ const Home: React.FC = () => {
             newVersionString = `${versionToAdd} (${addVersionModLoader} ${addVersionLoaderVersion})`;
         }
 
-        const currentVersions = activeInstance.versions || [activeInstance.version];
+        let currentVersions = [...(activeInstance.versions || [activeInstance.version])];
+        
+        // FIX: Before adding a new version, ensure the CURRENT active version string includes its modloader info if it's not Vanilla.
+        // This prevents losing the modloader state when switching away from it.
+        const currentSelectedVer = activeInstance.selectedVersion || activeInstance.version;
+        
+        // If current version string is "naked" (no parens) but we have a modloader, upgrade it in the list
+        if (activeInstance.modLoader && !currentSelectedVer.includes('(')) {
+             const upgradedVer = `${currentSelectedVer} (${activeInstance.modLoader} ${activeInstance.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
+             
+             // Replace in list
+             currentVersions = currentVersions.map(v => v === currentSelectedVer ? upgradedVer : v);
+             
+             // We also need to update the instance state to reflect this change immediately, 
+             // otherwise the backend update below might use stale data or we might have a mismatch.
+             // However, we are about to send a full update to the backend anyway.
+        }
+
         if (currentVersions.includes(newVersionString)) {
             setToastMessage("Esta versión ya está instalada");
             setTimeout(() => setToastMessage(null), 3000);
@@ -550,15 +600,17 @@ const Home: React.FC = () => {
         try {
             const { invoke } = await import("@tauri-apps/api/core");
             
-            // We update the versions list. 
-            // We DO NOT update the global modLoader here, because that should happen when the version is SELECTED.
-            // However, since we are auto-selecting it, we will update it.
-            
             const updatePayload: any = {
                 id: activeInstance.id,
                 versions: newVersions,
             };
 
+            // If we upgraded the current version string, we should update selectedVersion too
+            // But wait, if we are adding a NEW version, we are about to switch to IT.
+            // So the old version becomes just an entry in the list.
+            // BUT, if we don't update selectedVersion to the new string, the UI might get confused if we didn't switch?
+            // The logic below switches to the NEW version.
+            
             // If we are auto-selecting the new version, update the global state too
             if (addVersionModLoader !== 'Vanilla') {
                 updatePayload.modLoader = addVersionModLoader;
@@ -567,6 +619,9 @@ const Home: React.FC = () => {
                 updatePayload.modLoader = null;
                 updatePayload.modLoaderVersion = null;
             }
+            
+            // Also update selectedVersion to the new one
+            updatePayload.selectedVersion = newVersionString;
 
             await invoke("update_instance", updatePayload);
             
@@ -630,12 +685,26 @@ const Home: React.FC = () => {
             newModLoader = complexVersionMatch[2];
             newModLoaderVersion = complexVersionMatch[3];
         } else {
-            // It's a simple version (Vanilla). 
-            // If we switch to Vanilla, we should probably clear the mod loader to avoid confusion
-            // UNLESS the user wants to apply the global mod loader to this version.
-            // But given the new "Add Version" flow, simple versions are likely Vanilla.
-            newModLoader = undefined;
-            newModLoaderVersion = undefined;
+            // It's a simple version.
+            
+            // Check if current instance version is complex or simple, and extract MC version
+            const currentVersionString = activeInstance.selectedVersion || activeInstance.version;
+
+            // FIX: If we are switching to a "naked" version string, we should assume it is Vanilla UNLESS it is the exact same version string we are currently on (which shouldn't happen in a change handler usually, but good for safety).
+            // The previous logic tried to be smart and preserve the modloader if the MC version matched, but this caused issues where switching to a Vanilla version of the same MC version (if added) would keep the modloader.
+            // NOW: We rely on the fact that modded versions SHOULD have the suffix. If they don't, they are Vanilla.
+            // EXCEPTION: If the user hasn't "upgraded" their version strings yet (legacy), we might want to be careful.
+            // But with the new handleAddVersion logic, we are upgrading strings.
+            
+            if (version === currentVersionString) {
+                 // Same version string, keep state
+                 newModLoader = activeInstance.modLoader;
+                 newModLoaderVersion = activeInstance.modLoaderVersion;
+            } else {
+                 // Different version string, and it's naked -> Vanilla
+                 newModLoader = undefined;
+                 newModLoaderVersion = undefined;
+            }
         }
 
         try {
@@ -658,19 +727,118 @@ const Home: React.FC = () => {
     };
 
     useEffect(() => {
-        const loadVersions = async () => {
-            if (versions.length === 0) {
-                try {
-                    const { invoke } = await import("@tauri-apps/api/core");
+        const loadData = async () => {
+            try {
+                const { invoke } = await import("@tauri-apps/api/core");
+
+                // Load Versions
+                if (versions.length === 0) {
                     const versionList = await invoke("get_available_versions");
                     setVersions(versionList as any[]);
-                } catch (error) {
-                    console.error("Failed to load versions:", error);
                 }
+
+                // Load Instances
+                const backendInstances = await invoke("get_instances") as Instance[];
+                
+                // Map of local instances for quick lookup
+                const localMap = new Map(instances.map(i => [i.id, i]));
+
+                // MIGRATION: Fix legacy instances where modded versions are stored as simple strings
+                for (const inst of backendInstances) {
+                    if (inst.modLoader && inst.versions) {
+                        const localInst = localMap.get(inst.id);
+                        // Use local selectedVersion if available, else backend version
+                        const activeVer = localInst?.selectedVersion || inst.version;
+                        
+                        // If active version is simple (no parens) but we have a modloader
+                        if (activeVer && !activeVer.includes('(')) {
+                             const complexVer = `${activeVer} (${inst.modLoader} ${inst.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
+                             
+                             // Check if we need to update versions list
+                             if (inst.versions.includes(activeVer) && !inst.versions.includes(complexVer)) {
+                                 console.log(`[Migration] Upgrading instance ${inst.name} version to ${complexVer}`);
+                                 const newVersions = inst.versions.map(v => v === activeVer ? complexVer : v);
+                                 
+                                 // Update in memory object so the merge below uses the new list
+                                 inst.versions = newVersions;
+                                 
+                                 // Persist to backend
+                                 await invoke("update_instance", {
+                                     id: inst.id,
+                                     versions: newVersions
+                                 });
+                             }
+                        }
+                    }
+                }
+                
+                // Merge with existing order to preserve drag-and-drop changes
+                const backendMap = new Map(backendInstances.map(i => [i.id, i]));
+                const newOrderedInstances: Instance[] = [];
+                
+                // 1. Keep existing instances in order
+                instances.forEach(localInst => {
+                    if (backendMap.has(localInst.id)) {
+                        const fresh = backendMap.get(localInst.id)!;
+                        
+                        // Resolve selectedVersion
+                        let selVer = localInst.selectedVersion || fresh.version;
+                        
+                        // If selectedVersion was the simple string, and we migrated it in 'fresh', update it
+                        if (fresh.modLoader && selVer && !selVer.includes('(')) {
+                             const potentialComplex = `${selVer} (${fresh.modLoader} ${fresh.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
+                             if (fresh.versions?.includes(potentialComplex)) {
+                                 selVer = potentialComplex;
+                             }
+                        }
+
+                        newOrderedInstances.push({
+                            ...fresh,
+                            selectedVersion: selVer
+                        });
+                        backendMap.delete(localInst.id);
+                    }
+                });
+                
+                // 2. Add new instances
+                backendMap.forEach(inst => {
+                     // New instance from backend
+                     let selVer = inst.version;
+                     if (inst.modLoader && !selVer.includes('(')) {
+                         const complex = `${selVer} (${inst.modLoader} ${inst.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
+                         if (inst.versions?.includes(complex)) {
+                             selVer = complex;
+                         }
+                     }
+
+                    newOrderedInstances.push({
+                        ...inst,
+                        selectedVersion: selVer
+                    });
+                });
+
+                setInstances(newOrderedInstances);
+
+                // Sync selectedInstance if it exists and was migrated
+                // We use getState() to ensure we check the CURRENTLY selected instance, not the one from closure
+                const currentSelected = useLauncherStore.getState().selectedInstance;
+                if (currentSelected) {
+                    const updated = newOrderedInstances.find(i => i.id === currentSelected.id);
+                    if (updated && (
+                        updated.selectedVersion !== currentSelected.selectedVersion || 
+                        JSON.stringify(updated.versions) !== JSON.stringify(currentSelected.versions)
+                    )) {
+                        console.log("[Home] Updating stale selectedInstance with migrated data");
+                        setSelectedInstance(updated);
+                    }
+                }
+
+            } catch (error) {
+                console.error("Failed to load data:", error);
             }
         };
-        loadVersions();
-    }, [versions, setVersions]);
+        loadData();
+    }, []); // Run once on mount
 
     useEffect(() => {
         let unlisten: (() => void) | undefined;
@@ -707,6 +875,7 @@ const Home: React.FC = () => {
         setSelectedInstance(instance);
         
         setIsLaunching(true);
+        setLaunchStartTime(Date.now());
         setLaunchStage("Preparando...");
         setLaunchProgress(0);
 
@@ -866,6 +1035,10 @@ const Home: React.FC = () => {
             console.error("Launch failed:", error);
             addLog(`Launch failed: ${error}`);
             setIsLaunching(false);
+            setLaunchStartTime(null);
+            setToastType('error');
+            setToastMessage(typeof error === 'string' ? error : "Error al iniciar el juego");
+            setTimeout(() => setToastMessage(null), 5000);
         }
     };
 
@@ -1123,7 +1296,7 @@ const Home: React.FC = () => {
                             className={styles.settingsOverlay}
                         >
                             {/* Header */}
-                            <div className={styles.settingsHeader}>
+                            <div className={styles.settingsHeader} data-tauri-drag-region>
                                 <button 
                                     onClick={() => setShowSettingsModal(false)}
                                     className={styles.backSettingsButton}
@@ -1482,10 +1655,10 @@ const Home: React.FC = () => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-12"
+                            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
                         >
-                            <div className="bg-[#1a1a1a] w-full h-full rounded-b-2xl border border-white/10 flex flex-col overflow-hidden">
-                                <div className="custom-modal-header border-b border-white/10 flex items-center justify-between bg-[#1a1a1a]">
+                            <div className="bg-[#1a1a1a] w-full h-full rounded-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl">
+                                <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#1a1a1a]">
                                     <h3 className="text-xl font-bold text-white">Seleccionar Fondo</h3>
                                     <button 
                                         onClick={() => setShowBackgroundSelector(false)}
@@ -1496,6 +1669,17 @@ const Home: React.FC = () => {
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-6">
                                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                        {/* Upload Option */}
+                                        <div 
+                                            onClick={handleSelectCustomBackground}
+                                            className="h-40 w-full rounded-xl overflow-hidden cursor-pointer border-2 border-dashed border-white/10 transition-all hover:scale-105 hover:z-10 relative flex flex-col items-center justify-center gap-3 hover:bg-white/5 hover:border-[#ffbfba] group"
+                                        >
+                                            <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[#ffbfba]/20 transition-colors">
+                                                <Upload className="text-white/40 group-hover:text-[#ffbfba]" size={24} />
+                                            </div>
+                                            <span className="text-sm font-medium text-white/40 group-hover:text-white transition-colors">Subir Imagen</span>
+                                        </div>
+
                                         {BACKGROUNDS.map((bg) => (
                                             <div 
                                                 key={bg}
@@ -1534,7 +1718,7 @@ const Home: React.FC = () => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-12"
+                            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-12"
                         >
                             <motion.div
                                 initial={{ scale: 0.9, opacity: 0 }}
@@ -1560,9 +1744,17 @@ const Home: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={confirmDeleteInstance}
-                                            className="flex-1 h-14 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg font-bold transition-all"
+                                            disabled={isDeleting}
+                                            className="flex-1 h-14 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
                                         >
-                                            Eliminar
+                                            {isDeleting ? (
+                                                <>
+                                                    <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                                    Eliminando...
+                                                </>
+                                            ) : (
+                                                "Eliminar"
+                                            )}
                                         </button>
                                     </div>
                                 </div>
@@ -1578,9 +1770,12 @@ const Home: React.FC = () => {
                             initial={{ opacity: 0, y: 50 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 50 }}
-                            className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-[#1a1a1a] border border-white/10 text-white px-6 py-3 rounded-xl shadow-2xl z-[60] flex items-center gap-3"
+                            className={cn(
+                                "absolute bottom-20 left-1/2 -translate-x-1/2 bg-[#1a1a1a] border px-6 py-3 rounded-xl shadow-2xl z-[60] flex items-center gap-3",
+                                toastType === 'error' ? "border-red-500/50 text-red-200" : "border-white/10 text-white"
+                            )}
                         >
-                            <Check size={20} className="text-green-400" />
+                            {toastType === 'error' ? <AlertCircle size={20} className="text-red-500" /> : <Check size={20} className="text-green-400" />}
                             <span className="font-medium">{toastMessage}</span>
                         </motion.div>
                     )}

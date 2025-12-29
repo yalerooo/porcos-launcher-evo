@@ -163,40 +163,56 @@ struct ForgeResponse {
 
 #[command]
 pub async fn get_forge_versions(minecraft_version: String) -> Result<Vec<LoaderVersion>, String> {
-    let url = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json";
-    let response = reqwest::get(url).await.map_err(|e| e.to_string())?;
-
-    if !response.status().is_success() {
-        return Ok(Vec::new());
-    }
-
-    let data: ForgeResponse = response.json().await.map_err(|e| e.to_string())?;
+    // 1. Fetch Promos to identify recommended (stable)
+    let promos_url = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json";
+    let mut recommended_ver = String::new();
     
-    let mut versions = Vec::new();
-    
-    let latest_key = format!("{}-latest", minecraft_version);
-    let recommended_key = format!("{}-recommended", minecraft_version);
-
-    if let Some(v) = data.promos.get(&recommended_key) {
-        versions.push(LoaderVersion {
-            id: format!("forge-{}", v),
-            loader: "forge".to_string(),
-            version: v.clone(),
-            stable: true,
-        });
-    }
-
-    if let Some(v) = data.promos.get(&latest_key) {
-        // Avoid duplicate if latest == recommended
-        if !versions.iter().any(|existing| existing.version == *v) {
-             versions.push(LoaderVersion {
-                id: format!("forge-{}", v),
-                loader: "forge".to_string(),
-                version: v.clone(),
-                stable: false, // Latest is considered unstable/beta usually
-            });
+    // We try to fetch promos, but don't fail if it fails
+    if let Ok(response) = reqwest::get(promos_url).await {
+        if let Ok(data) = response.json::<ForgeResponse>().await {
+            let key = format!("{}-recommended", minecraft_version);
+            if let Some(v) = data.promos.get(&key) {
+                recommended_ver = v.clone();
+            }
         }
     }
+
+    // 2. Fetch Maven Metadata for full list
+    let metadata_url = "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml";
+    let response = reqwest::get(metadata_url).await.map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch Forge metadata: {}", response.status()));
+    }
+
+    let xml_content = response.text().await.map_err(|e| e.to_string())?;
+    
+    let mut versions = Vec::new();
+    let prefix = format!("{}-", minecraft_version); // e.g. "1.20.1-"
+
+    for line in xml_content.lines() {
+        let line = line.trim();
+        if line.starts_with("<version>") && line.ends_with("</version>") {
+            // Extract content between tags
+            if line.len() > 19 { // <version></version> is 19 chars
+                let content = &line[9..line.len()-10]; 
+                // Content is like "1.20.1-47.4.13"
+                if content.starts_with(&prefix) {
+                    let forge_ver = &content[prefix.len()..]; // "47.4.13"
+                    
+                    versions.push(LoaderVersion {
+                        id: format!("forge-{}", forge_ver),
+                        loader: "forge".to_string(),
+                        version: forge_ver.to_string(),
+                        stable: forge_ver == recommended_ver,
+                    });
+                }
+            }
+        }
+    }
+
+    // Sort: Newest first (descending)
+    versions.sort_by(|a, b| compare_versions(&b.version, &a.version));
 
     Ok(versions)
 }

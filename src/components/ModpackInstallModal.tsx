@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Download, Loader2, AlertCircle, Check, Package } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { join, appCacheDir, homeDir } from '@tauri-apps/api/path';
@@ -10,6 +10,16 @@ import { cn } from '@/lib/utils';
 
 // Force re-render
 const TIMESTAMP = Date.now();
+
+const getFileNameFromUrl = (url: string) => {
+    try {
+        const cleanUrl = url.split('?')[0];
+        const name = cleanUrl.split('/').pop();
+        return name ? decodeURIComponent(name) : 'download.zip';
+    } catch (e) {
+        return 'download.zip';
+    }
+};
 
 const BACKGROUNDS = [
     "1021170.png", "1102409.png", "1117616.jpg", "1117617.jpg", "1117618.jpg", "1117621.jpg", 
@@ -39,8 +49,17 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
     const [isSuccess, setIsSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
+    // Refs for cancellation and cleanup
+    const abortRef = useRef(false);
+    const instanceIdRef = useRef<string | null>(null);
+    const tempDirRef = useRef<string | null>(null);
+    
     // Ref to track if we are currently downloading a large file to show detailed progress
     const isDownloadingRef = useRef(false);
+    
+    // Refs for parallel download progress tracking
+    const fileProgressRef = useRef<Map<string, number>>(new Map());
+    const totalFilesRef = useRef(0);
 
     // Filters
     const [filterGameVersion, setFilterGameVersion] = useState<string>('');
@@ -54,8 +73,36 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
         const setupListener = async () => {
             unlisten = await listen('download-progress', (event: any) => {
                 if (isDownloadingRef.current) {
-                    // Update progress directly from the event payload (0-100)
-                    setProgress(Math.round(event.payload as number));
+                    const payload = event.payload as any;
+                    let progressValue = 0;
+                    let id = null;
+
+                    // Handle both old (number) and new (object) formats
+                    if (typeof payload === 'number') {
+                        progressValue = payload;
+                    } else if (payload && typeof payload === 'object') {
+                        progressValue = payload.progress;
+                        id = payload.id;
+                    }
+
+                    if (id && totalFilesRef.current > 1) {
+                        fileProgressRef.current.set(id, progressValue);
+                        
+                        let totalProgress = 0;
+                        // Sum up progress of all tracked files
+                        // We iterate over the known IDs we expect (initialized in the loop)
+                        // or just iterate the map values if we trust it contains all.
+                        // Better to iterate the map values.
+                        for (const val of fileProgressRef.current.values()) {
+                            totalProgress += val;
+                        }
+                        
+                        const average = totalProgress / totalFilesRef.current;
+                        setProgress(Math.round(average));
+                    } else {
+                        // Single file or no ID
+                        setProgress(Math.round(progressValue));
+                    }
                 }
             });
         };
@@ -192,15 +239,50 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
         }
     }, [filterGameVersion, filterLoader, versions]);
 
+    const { removeInstance } = useLauncherStore();
+
+    const handleCancel = async () => {
+        if (!isInstalling) return;
+        abortRef.current = true;
+        setInstallStage("Cancelando y limpiando...");
+        await performCleanup();
+    };
+
+    const performCleanup = async () => {
+        console.log("Performing cleanup...");
+        try {
+            // Delete instance
+            if (instanceIdRef.current) {
+                await invoke('delete_instance', { id: instanceIdRef.current });
+                removeInstance(instanceIdRef.current);
+            }
+            
+            // Delete temp dir if we tracked it (we usually use a fixed temp dir structure)
+            // We can try to delete the specific temp folder for this install if we had one.
+            // For now, we rely on OS or next run to clear temp, or we can try to clear the specific files we downloaded.
+            
+        } catch (e) {
+            console.error("Cleanup failed", e);
+        }
+        onClose();
+    };
+
     const handleInstall = async () => {
         if (!selectedVersion) return;
         setIsInstalling(true);
         setError(null);
         
+        // Reset refs
+        abortRef.current = false;
+        instanceIdRef.current = null;
+        tempDirRef.current = null;
+        
         try {
             // 1. Prepare Paths
             const cacheDir = await appCacheDir();
-            const tempDir = await join(cacheDir, 'temp_modpacks');
+            // Use a unique temp directory for each install to avoid conflicts
+            const tempDir = await join(cacheDir, 'temp_modpacks', Date.now().toString());
+            tempDirRef.current = tempDir;
             // Ensure temp dir exists (extract_zip handles parent dirs, but good to be safe)
 
             if (modpack.source === 'porcos') {
@@ -217,6 +299,8 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 // We install from index 0 up to targetIndex
                 const versionsToInstall = sortedVersions.slice(0, targetIndex + 1);
                 
+                if (abortRef.current) throw new Error("CANCELLED");
+
                 // 1. Create Instance FIRST (using target version metadata)
                 setInstallStage('Creando instancia...');
                 
@@ -227,6 +311,8 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                      await invoke('download_file', { url: modpack.icon, path: tempIconPath });
                      iconPath = tempIconPath;
                 }
+                
+                if (abortRef.current) throw new Error("CANCELLED");
                 
                 let modLoader = 'forge';
                 let modLoaderVersion = selectedVersion.forgeVersion;
@@ -253,6 +339,9 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                     modLoaderVersion,
                     imagePath: iconPath
                 }) as any;
+                
+                // Track instance ID for cleanup
+                instanceIdRef.current = newInstance.id;
 
                 // Update instance with complex version string for robustness
                 if (modLoader && modLoader !== 'Vanilla') {
@@ -264,6 +353,8 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 } else {
                     newInstance.versions = [selectedVersion.minecraftVersion];
                     newInstance.selectedVersion = selectedVersion.minecraftVersion;
+                    newInstance.modLoader = undefined;
+                    newInstance.modLoaderVersion = undefined;
                 }
                 
                 // Save Porcos metadata
@@ -366,37 +457,107 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 }
                 
                 addInstance(newInstance);
+                
+                if (abortRef.current) throw new Error("CANCELLED");
 
                 // 2. Install Versions Sequentially
                 for (let vIndex = 0; vIndex < versionsToInstall.length; vIndex++) {
+                    if (abortRef.current) throw new Error("CANCELLED");
+                    
                     const ver = versionsToInstall[vIndex];
                     setInstallStage(`Instalando versión ${ver.version} (${vIndex + 1}/${versionsToInstall.length})...`);
                     
                     // Download
                     const downloadUrls = [];
                     if (ver.downloadUrl) downloadUrls.push(ver.downloadUrl);
-                    if (ver.downloadUrl2) downloadUrls.push(ver.downloadUrl2);
-                    if (ver.downloadUrl3) downloadUrls.push(ver.downloadUrl3);
-                    if (ver.downloadUrl4) downloadUrls.push(ver.downloadUrl4);
-                    if (ver.downloadUrl5) downloadUrls.push(ver.downloadUrl5);
+                    
+                    // Dynamically check for downloadUrl2, downloadUrl3, etc. without limit
+                    let urlIndex = 2;
+                    while (ver[`downloadUrl${urlIndex}`]) {
+                        downloadUrls.push(ver[`downloadUrl${urlIndex}`]);
+                        urlIndex++;
+                    }
                     
                     const zipPaths = [];
-                    for (let i = 0; i < downloadUrls.length; i++) {
-                        const url = downloadUrls[i];
-                        const fileName = url.split('/').pop() || `install_${ver.version}_${i}.zip`;
+                    
+                    setInstallStage(`Descargando archivos de versión ${ver.version}...`);
+                    
+                    const totalDownloads = downloadUrls.length;
+                    let completedDownloads = 0;
+
+                    // Enable detailed progress
+                    isDownloadingRef.current = true;
+                    setProgress(0);
+                    
+                    // Setup parallel progress tracking
+                    totalFilesRef.current = totalDownloads;
+                    fileProgressRef.current.clear();
+                    // Initialize with 0
+                    downloadUrls.forEach((_, i) => fileProgressRef.current.set(`file_${i}`, 0));
+                    
+                    const downloadPromises = downloadUrls.map(async (url, i) => {
+                        if (abortRef.current) return null;
+                        
+                        let fileName;
+                        
+                        // If we have multiple downloads, assume it's a split archive and force naming
+                        if (downloadUrls.length > 1) {
+                            // Try to guess extension from URL, default to rar for split archives
+                            let ext = 'rar';
+                            if (url.toLowerCase().includes('.zip')) ext = 'zip';
+                            else if (url.toLowerCase().includes('.7z')) ext = '7z';
+                            
+                            // Pad the part number: part01, part02... unrar likes this sometimes, but part1 is usually fine.
+                            // Let's use part1, part2.
+                            fileName = `modpack_install.part${i+1}.${ext}`;
+                        } else {
+                            fileName = getFileNameFromUrl(url);
+                            if (!fileName || fileName === 'download.zip') {
+                                 const ext = url.split('.').pop()?.split('?')[0] || 'zip';
+                                 fileName = `install_${ver.version}.${ext}`;
+                            }
+                        }
+
                         const filePath = await join(tempDir, fileName);
+                        const fileId = `file_${i}`;
                         
-                        setInstallStage(`Descargando parte ${i + 1}/${downloadUrls.length} de versión ${ver.version}...`);
-                        isDownloadingRef.current = true;
-                        setProgress(0);
-                        await invoke('download_file', { url, path: filePath });
-                        isDownloadingRef.current = false;
+                        await invoke('download_file', { url, path: filePath, id: fileId });
                         
-                        zipPaths.push(filePath);
-                    }
+                        if (totalDownloads > 1) {
+                            completedDownloads++;
+                            // Progress is updated by event listener
+                            setInstallStage(`Descargando archivos (${completedDownloads}/${totalDownloads})...`);
+                        }
+                        
+                        return filePath;
+                    });
+                    
+                    const paths = await Promise.all(downloadPromises);
+                    isDownloadingRef.current = false;
+                    
+                    if (abortRef.current) throw new Error("CANCELLED");
+                    
+                    // Filter out nulls from cancelled promises
+                    const validPaths = paths.filter(p => p !== null) as string[];
+                    zipPaths.push(...validPaths);
                     
                     // Extract
                     for (const zipPath of zipPaths) {
+                        if (abortRef.current) throw new Error("CANCELLED");
+                        
+                        // Skip secondary RAR volumes
+                        const lowerName = zipPath.toLowerCase();
+                        if (lowerName.endsWith('.rar')) {
+                             const partMatch = lowerName.match(/\.part(\d+)\.rar$/);
+                             if (partMatch) {
+                                 const partNum = parseInt(partMatch[1]);
+                                 if (partNum > 1) {
+                                     console.log(`Skipping extraction of secondary volume: ${zipPath}`);
+                                     continue;
+                                 }
+                             }
+                        }
+
                         setInstallStage(`Extrayendo archivos...`);
                         // extract_zip now handles .rar via unrar crate
                         await invoke('extract_zip', { zipPath, targetDir: instancePath });
@@ -417,8 +578,10 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 setInstallStage('Finalizando...');
                 setProgress(100);
                 setTimeout(() => {
-                    setIsSuccess(true);
-                    setIsInstalling(false);
+                    if (!abortRef.current) {
+                        setIsSuccess(true);
+                        setIsInstalling(false);
+                    }
                 }, 1000);
                 
                 return;
@@ -439,12 +602,17 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
             const zipPath = await join(tempDir, fileName);
             const extractPath = await join(tempDir, `${modpack.id}_${Date.now()}`);
 
+            if (abortRef.current) throw new Error("CANCELLED");
+
             // 2. Download
             setInstallStage('Descargando modpack...');
             isDownloadingRef.current = true;
+            totalFilesRef.current = 1;
             setProgress(0);
             await invoke('download_file', { url: downloadUrl, path: zipPath });
             isDownloadingRef.current = false;
+            
+            if (abortRef.current) throw new Error("CANCELLED");
 
             // 3. Extract
             setInstallStage('Extrayendo archivos...');
@@ -489,9 +657,17 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 const loaderObj = manifest.minecraft.modLoaders.find((l: any) => l.primary);
                 
                 if (loaderObj) {
+                    console.log("Found loader in manifest:", loaderObj.id);
                     const parts = loaderObj.id.split('-');
                     modLoader = parts[0];
                     modLoaderVersion = parts.slice(1).join('-');
+                    
+                    // Fix: Strip MC version if present in loader version (e.g. forge-1.20.1-47.4.0 -> 47.4.0)
+                    if (modLoaderVersion.startsWith(mcVersion + '-')) {
+                        console.log("Stripping MC version from loader version");
+                        modLoaderVersion = modLoaderVersion.substring(mcVersion.length + 1);
+                    }
+                    console.log("Parsed loader:", modLoader, "Version:", modLoaderVersion);
                 } else {
                     modLoader = 'forge';
                 }
@@ -505,6 +681,51 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
 
                 // overridesDir = await join(extractPath, manifest.overrides);
             }
+
+            // --- VALIDATION OF MOD LOADER VERSION ---
+            if (modLoader.toLowerCase() === 'forge') {
+                try {
+                    setInstallStage('Validando versión de Forge...');
+                    const validVersions = await invoke('get_forge_versions', { minecraftVersion: mcVersion }) as any[];
+                    
+                    // Check if the requested version exists in the valid list
+                    const isValid = validVersions.some(v => v.version === modLoaderVersion);
+                    
+                    if (!isValid) {
+                        console.warn(`Forge version ${modLoaderVersion} not found for MC ${mcVersion}. Attempting to find replacement...`);
+                        
+                        // Strategy 1: Try to find a version with the same major.minor (e.g. 47.1)
+                        // modLoaderVersion might be "47.1.39"
+                        const parts = modLoaderVersion.split('.');
+                        if (parts.length >= 2) {
+                            const prefix = `${parts[0]}.${parts[1]}`; // "47.1"
+                            const replacement = validVersions.find(v => v.version.startsWith(prefix));
+                            
+                            if (replacement) {
+                                console.log(`Replacing invalid version ${modLoaderVersion} with closest match ${replacement.version}`);
+                                modLoaderVersion = replacement.version;
+                            } else {
+                                // Strategy 2: Fallback to latest valid version
+                                if (validVersions.length > 0) {
+                                    console.log(`Replacing invalid version ${modLoaderVersion} with latest ${validVersions[0].version}`);
+                                    modLoaderVersion = validVersions[0].version;
+                                }
+                            }
+                        } else if (validVersions.length > 0) {
+                             // Fallback to latest
+                             console.log(`Replacing invalid version ${modLoaderVersion} with latest ${validVersions[0].version}`);
+                             modLoaderVersion = validVersions[0].version;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to validate Forge version", e);
+                    // If validation fails (e.g. network error), we proceed with the original version
+                    // and hope for the best.
+                }
+            }
+            // ----------------------------------------
+
+            if (abortRef.current) throw new Error("CANCELLED");
 
             // Download Icon
             let iconPath = null;
@@ -541,6 +762,8 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 modLoaderVersion: modLoaderVersion,
                 imagePath: iconPath
             }) as any;
+            
+            instanceIdRef.current = newInstance.id;
 
             // Update instance with complex version string for robustness
             if (modLoader && modLoader !== 'Vanilla') {
@@ -554,6 +777,8 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
             } else {
                 newInstance.versions = [mcVersion];
                 newInstance.selectedVersion = mcVersion;
+                newInstance.modLoader = undefined;
+                newInstance.modLoaderVersion = undefined;
             }
 
             // Create instance_info.json for robustness
@@ -600,6 +825,8 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
             
             addInstance(newInstance);
             const instancePath = await invoke('get_instance_path', { id: newInstance.id }) as string;
+            
+            if (abortRef.current) throw new Error("CANCELLED");
 
             // 5. Install Mods
             setInstallStage(`Instalando ${modList.length} mods...`);
@@ -607,10 +834,13 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
             const installedModsTracker: any[] = [];
 
             // Process mods in chunks to avoid rate limits
-            const chunkSize = 5;
+            const chunkSize = 20;
             for (let i = 0; i < modList.length; i += chunkSize) {
+                if (abortRef.current) throw new Error("CANCELLED");
+                
                 const chunk = modList.slice(i, i + chunkSize);
                 await Promise.all(chunk.map(async (mod) => {
+                    if (abortRef.current) return;
                     try {
                         let url = mod.url;
                         let destPath = '';
@@ -687,14 +917,21 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
             setProgress(100);
             
             setTimeout(() => {
-                setIsSuccess(true);
-                setIsInstalling(false);
+                if (!abortRef.current) {
+                    setIsSuccess(true);
+                    setIsInstalling(false);
+                }
             }, 1000);
 
         } catch (e: any) {
-            console.error("Installation failed", e);
-            setError(e.message || "Error desconocido durante la instalación");
-            setIsInstalling(false);
+            if (e.message === "CANCELLED" || abortRef.current) {
+                console.log("Installation cancelled by user");
+                await performCleanup();
+            } else {
+                console.error("Installation failed", e);
+                setError(e.message || "Error desconocido durante la instalación");
+                setIsInstalling(false);
+            }
         }
     };
 
@@ -842,22 +1079,34 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 </div>
 
                 {/* Footer */}
-                {!isInstalling && !isSuccess && (
+                {!isSuccess && (
                     <div className={styles.footer}>
-                        <button 
-                            onClick={onClose}
-                            className={styles.cancelButton}
-                        >
-                            Cancelar
-                        </button>
-                        <button 
-                            onClick={handleInstall}
-                            disabled={!selectedVersion}
-                            className={styles.installButton}
-                        >
-                            <Download size={18} />
-                            Instalar
-                        </button>
+                        {isInstalling ? (
+                            <button 
+                                onClick={handleCancel}
+                                className={styles.cancelButton}
+                                style={{ width: '100%', justifyContent: 'center' }}
+                            >
+                                Cancelar Instalación
+                            </button>
+                        ) : (
+                            <>
+                                <button 
+                                    onClick={onClose}
+                                    className={styles.cancelButton}
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={handleInstall}
+                                    disabled={!selectedVersion}
+                                    className={styles.installButton}
+                                >
+                                    <Download size={18} />
+                                    Instalar
+                                </button>
+                            </>
+                        )}
                     </div>
                 )}
             </motion.div>

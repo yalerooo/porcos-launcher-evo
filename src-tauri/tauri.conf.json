@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "porcoslauncherevo",
+  "productName": "PorcosLauncherEvo",
   "version": "0.1.0",
   "identifier": "com.yaler.porcoslauncherevo",
   "build": {
@@ -13,14 +13,14 @@
     "windows": [
       {
         "label": "main",
-        "title": "porcoslauncherevo",
-        "width": 1000,
-        "height": 700,
+        "title": "PorcosLauncherEvo",
+        "width": 1800,
+        "height": 800,
         "decorations": false,
         "transparent": true,
         "visible": false,
         "shadow": false,
-        "maximizable": false,
+        "maximizable": true,
         "resizable": true
       },
       {
@@ -43,7 +43,8 @@
           "identifier": "main-capability",
           "description": "Main window capability",
           "windows": [
-            "main"
+            "main",
+            "splashscreen"
           ],
           "permissions": [
             "core:default",
@@ -56,7 +57,8 @@
             "core:webview:allow-create-webview-window",
             "shell:allow-execute",
             "shell:allow-open",
-            "dialog:default"
+            "dialog:default",
+            "process:default"
           ]
         }
       ]
@@ -65,6 +67,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Porcos Team",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
