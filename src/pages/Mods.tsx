@@ -1108,6 +1108,8 @@ const Mods: React.FC = () => {
         return instances.find(i => i.id === targetInstanceId)?.name || "Seleccionar Instancia";
     };
 
+    const targetInstance = instances.find(i => i.id === targetInstanceId);
+    
     const filteredItems = items.filter(item => searchType !== 'updates' || updatesAvailable.get(item.id));
 
     return (
@@ -1201,9 +1203,20 @@ const Mods: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+
+                        {/* Version Selector for Multi-version Instances */}
+                        {searchType === 'mods' && targetInstance?.versions && targetInstance.versions.length > 1 && (
+                            <FilterDropdown
+                                value={filterVersion}
+                                onChange={setFilterVersion}
+                                options={(targetInstance?.versions || []).map(v => ({ value: v, label: v }))}
+                                placeholder="Versión (Cualquiera)"
+                                icon={<Gamepad2 size={16} className="text-[#a1a1aa]" />}
+                            />
+                        )}
                         
-                        {/* Active Filters Badge */}
-                        {(filterVersion || filterLoader) && (
+                        {/* Active Filters Badge - Only show if NOT showing the dropdown selector */}
+                        {!(searchType === 'mods' && targetInstance?.versions && targetInstance.versions.length > 1) && (filterVersion || filterLoader) && (
                             <div className={styles.filterBadge}>
                                 <Filter size={12} className="text-[#ffbfba]" />
                                 <span className={styles.filterBadgeText}>
@@ -1230,7 +1243,7 @@ const Mods: React.FC = () => {
                     </div>
                 )}
 
-                {/* Filters Row */}
+                {/* Filters Row - Only for Modpacks */}
                 {searchType === 'modpacks' && (
                     <div className={styles.controlsRow}>
                         <FilterDropdown
