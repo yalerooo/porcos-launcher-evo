@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Home, Box, Settings, Terminal, LogOut, Minus, X, Puzzle, AlertCircle, Square } from 'lucide-react';
+import { Home, Box, Settings, Terminal, LogOut, Minus, X, Puzzle, AlertCircle, Square, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import styles from '../pages/Home.module.css';
 import { useLauncherStore } from '@/stores/launcherStore';
@@ -27,6 +27,30 @@ export default function MainLayout({
   userProfile
 }: MainLayoutProps) {
   const appWindow = getCurrentWindow();
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+      const updateState = async () => {
+          try {
+              const tauriMax = await appWindow.isMaximized();
+              // Fallback check for Windows where isMaximized might report false incorrectly
+              const isScreenFilled = window.outerWidth >= window.screen.availWidth && window.outerHeight >= window.screen.availHeight;
+              setIsMaximized(tauriMax || isScreenFilled);
+          } catch (e) {
+              console.error("Failed to check window state:", e);
+          }
+      };
+
+      updateState();
+      const unlisten = appWindow.listen('tauri://resize', updateState);
+      window.addEventListener('resize', updateState);
+      
+      return () => {
+          unlisten.then(f => f());
+          window.removeEventListener('resize', updateState);
+      };
+  }, []);
+
   const { 
       isLaunching, 
       selectedInstance, 
@@ -260,11 +284,30 @@ export default function MainLayout({
                     <Minus size={20} className="text-white" strokeWidth={1.5} />
                 </button>
                 <button 
-                    onClick={() => appWindow.toggleMaximize()} 
+                    onClick={async () => {
+                        try {
+                            // Use the same logic as the state update
+                            const tauriMax = await appWindow.isMaximized();
+                            const isScreenFilled = window.outerWidth >= window.screen.availWidth && window.outerHeight >= window.screen.availHeight;
+                            const currentMax = tauriMax || isScreenFilled;
+
+                            if (currentMax) {
+                                await appWindow.unmaximize();
+                            } else {
+                                await appWindow.maximize();
+                            }
+                        } catch (e) {
+                            console.error("Maximize/Restore failed:", e);
+                        }
+                    }}
                     className="h-full w-[56px] flex items-center justify-center hover:bg-white/10 transition-colors group/max"
-                    title="Maximizar"
+                    title={isMaximized ? "Restaurar" : "Maximizar"}
                 >
-                    <Square size={16} className="text-white" strokeWidth={2} />
+                    {isMaximized ? (
+                        <Copy size={16} className="text-white" strokeWidth={2} style={{ transform: 'rotate(90deg)' }} />
+                    ) : (
+                        <Square size={16} className="text-white" strokeWidth={2} />
+                    )}
                 </button>
                 <button 
                     onClick={() => appWindow.close()} 

@@ -192,8 +192,9 @@
     background-color: #18181b;
     border: 1px solid #27272a;
     border-radius: 0.75rem;
-    padding: 0.5rem 0.75rem;
+    padding: 0.25rem 0.5rem;
     transition: border-color 0.2s;
+    position: relative;
 }
 
 .filterInputContainer:focus-within {
@@ -209,18 +210,59 @@
     width: 8rem;
 }
 
-.filterSelect {
+.customSelectButton {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     background: transparent;
     border: none;
-    outline: none;
-    font-size: 0.875rem;
     color: white;
-    width: 6rem;
+    font-size: 0.875rem;
     cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    min-width: 140px;
 }
 
-.filterSelect option {
+.customSelectDropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    width: 100%;
+    min-width: 180px;
+    max-height: 300px;
+    overflow-y: auto;
     background-color: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    z-index: 50;
+    padding: 0.25rem;
+}
+
+.customSelectOption {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: #a1a1aa;
+    cursor: pointer;
+    border-radius: 0.5rem;
+    transition: all 0.1s;
+    text-align: left;
+    font-size: 0.875rem;
+}
+
+.customSelectOption:hover {
+    background-color: #27272a;
+    color: white;
+}
+
+.customSelectOptionActive {
+    background-color: #27272a;
+    color: white;
 }
 
 .searchSection {

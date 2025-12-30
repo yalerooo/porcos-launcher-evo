@@ -99,16 +99,24 @@
     background-color: #18181b;
     border: 1px solid #27272a;
     color: #e4e4e7;
-    padding: 0.625rem;
+    padding: 0.75rem 1rem;
     border-radius: 0.5rem;
     font-size: 0.875rem;
     outline: none;
     cursor: pointer;
-    transition: border-color 0.2s;
+    transition: all 0.2s;
+    appearance: none; /* Hide default arrow */
+    width: 100%;
+}
+
+.filterSelect:hover {
+    border-color: #3f3f46;
+    background-color: #27272a;
 }
 
 .filterSelect:focus {
-    border-color: #3f3f46;
+    border-color: #ffbfba;
+    box-shadow: 0 0 0 2px rgba(255, 191, 186, 0.1);
 }
 
 /* Version List */

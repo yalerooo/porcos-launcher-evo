@@ -60,7 +60,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
     useEffect(() => {
         if (item) {
             loadDetails();
-            if (type === 'mods') {
+            if (type === 'mods' || type === 'modpacks') {
                 loadVersions();
             }
         }
@@ -140,6 +140,20 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                     else if (mappedVersions.length > 0) setSelectedVersion(mappedVersions[0]);
                 } else if (mappedVersions.length > 0) {
                     setSelectedVersion(mappedVersions[0]);
+                }
+            } else if (item.source === 'porcos') {
+                if (item.versions) {
+                    const mappedVersions = item.versions.map((v: any) => ({
+                        id: v.version,
+                        name: v.version,
+                        type: 'release',
+                        gameVersions: [v.minecraftVersion],
+                        loaders: [v.modLoader || (v.forgeVersion ? 'forge' : v.fabricVersion ? 'fabric' : 'unknown')],
+                        date: new Date().toLocaleDateString(),
+                        original: v
+                    }));
+                    setVersions(mappedVersions);
+                    if (mappedVersions.length > 0) setSelectedVersion(mappedVersions[0]);
                 }
             }
         } catch (e) {
@@ -237,7 +251,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                         
                         <div className={styles.actions}>
                             {/* Version Selector */}
-                            {type === 'mods' && versions.length > 0 && (
+                            {(type === 'mods' || type === 'modpacks') && versions.length > 0 && (
                                 <div className="relative" ref={dropdownRef}>
                                     <button 
                                         className={styles.versionSelector}

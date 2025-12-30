@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Download, Loader2, AlertCircle, Check, Package } from 'lucide-react';
+import { X, Download, Loader2, AlertCircle, Check, Package, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -232,12 +232,26 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
 
     // Auto-select first filtered version
     useEffect(() => {
+        if (modpack && modpack.preSelectedVersion && versions.length > 0) {
+             const preId = modpack.preSelectedVersion.id;
+             const match = versions.find(v => {
+                 if (modpack.source === 'modrinth') return v.id === preId;
+                 if (modpack.source === 'porcos') return v.version === preId;
+                 return v.id === preId;
+             });
+             
+             if (match) {
+                 setSelectedVersion(match);
+                 return;
+             }
+        }
+
         if (filteredVersions.length > 0) {
             setSelectedVersion(filteredVersions[0]);
         } else {
             setSelectedVersion(null);
         }
-    }, [filterGameVersion, filterLoader, versions]);
+    }, [filterGameVersion, filterLoader, versions, modpack]);
 
     const { removeInstance } = useLauncherStore();
 
@@ -1014,62 +1028,68 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                                     <div className={styles.filters}>
                                         <div className={styles.filterGroup}>
                                             <label className={styles.filterLabel}>Versión de Minecraft</label>
-                                            <select 
-                                                value={filterGameVersion}
-                                                onChange={(e) => setFilterGameVersion(e.target.value)}
-                                                className={styles.filterSelect}
-                                            >
-                                                {availableGameVersions.map(v => (
-                                                    <option key={v} value={v}>{v}</option>
-                                                ))}
-                                            </select>
+                                            <div className="relative">
+                                                <select 
+                                                    value={filterGameVersion}
+                                                    onChange={(e) => setFilterGameVersion(e.target.value)}
+                                                    className={styles.filterSelect}
+                                                >
+                                                    {availableGameVersions.map(v => (
+                                                        <option key={v} value={v}>{v}</option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" size={16} />
+                                            </div>
                                         </div>
                                         <div className={styles.filterGroup}>
                                             <label className={styles.filterLabel}>Modloader</label>
-                                            <select 
-                                                value={filterLoader}
-                                                onChange={(e) => setFilterLoader(e.target.value)}
-                                                className={styles.filterSelect}
-                                            >
-                                                {availableLoaders.map(l => (
-                                                    <option key={l} value={l}>{l}</option>
-                                                ))}
-                                            </select>
+                                            <div className="relative">
+                                                <select 
+                                                    value={filterLoader}
+                                                    onChange={(e) => setFilterLoader(e.target.value)}
+                                                    className={styles.filterSelect}
+                                                >
+                                                    {availableLoaders.map(l => (
+                                                        <option key={l} value={l}>{l}</option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" size={16} />
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className={styles.versionList}>
+                                        <label className={styles.filterLabel} style={{ marginBottom: '0.5rem', display: 'block' }}>Versión a Instalar</label>
                                         {filteredVersions.length === 0 ? (
                                             <div className={styles.emptyState}>
                                                 No hay versiones compatibles con los filtros seleccionados.
                                             </div>
                                         ) : (
-                                            filteredVersions.map((v: any) => {
-                                                const name = modpack.source === 'modrinth' ? v.name : (modpack.source === 'porcos' ? v.version : v.displayName);
-                                                const gameVersions = modpack.source === 'modrinth' ? v.game_versions.join(', ') : (modpack.source === 'porcos' ? v.minecraftVersion : v.gameVersions.join(', '));
-                                                const isSelected = selectedVersion === v;
-
-                                                return (
-                                                    <div 
-                                                        key={modpack.source === 'modrinth' ? v.id : (modpack.source === 'porcos' ? v.version : v.id)}
-                                                        onClick={() => setSelectedVersion(v)}
-                                                        className={cn(
-                                                            styles.versionCard,
-                                                            isSelected && styles.versionCardSelected
-                                                        )}
-                                                    >
-                                                        <div className="flex items-center justify-between w-full">
-                                                            <div>
-                                                                <h4 className={styles.versionName}>{name}</h4>
-                                                                <p className={styles.versionMeta}>
-                                                                    Minecraft {gameVersions}
-                                                                </p>
-                                                            </div>
-                                                            {isSelected && <Check className={styles.checkIcon} size={20} />}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
+                                            <div className="relative">
+                                                <select
+                                                    value={selectedVersion ? (modpack.source === 'modrinth' ? selectedVersion.id : (modpack.source === 'porcos' ? selectedVersion.version : selectedVersion.id)) : ''}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        const v = filteredVersions.find((ver: any) => (modpack.source === 'modrinth' ? ver.id : (modpack.source === 'porcos' ? ver.version : ver.id)).toString() === val);
+                                                        setSelectedVersion(v);
+                                                    }}
+                                                    className={styles.filterSelect}
+                                                    style={{ width: '100%' }}
+                                                >
+                                                    {filteredVersions.map((v: any) => {
+                                                        const id = modpack.source === 'modrinth' ? v.id : (modpack.source === 'porcos' ? v.version : v.id);
+                                                        const name = modpack.source === 'modrinth' ? v.name : (modpack.source === 'porcos' ? v.version : v.displayName);
+                                                        const gameVersions = modpack.source === 'modrinth' ? v.game_versions.join(', ') : (modpack.source === 'porcos' ? v.minecraftVersion : v.gameVersions.join(', '));
+                                                        
+                                                        return (
+                                                            <option key={id} value={id}>
+                                                                {name} - Minecraft {gameVersions}
+                                                            </option>
+                                                        );
+                                                    })}
+                                                </select>
+                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" size={16} />
+                                            </div>
                                         )}
                                     </div>
                                 </div>
