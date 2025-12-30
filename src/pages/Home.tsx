@@ -1416,7 +1416,7 @@ const Home: React.FC = () => {
                                             <h4 className={styles.settingsSectionTitle}>Gestión de Versiones</h4>
                                             
                                             {/* Add Version Card */}
-                                            <div className={styles.settingsCard}>
+                                            <div className={cn(styles.settingsCard, (isVersionSelectOpen || isAddVersionLoaderOpen || isAddVersionLoaderVersionOpen) ? styles.settingsCardActive : "")}>
                                                 <div className={styles.cardTitle}>
                                                     <Plus size={20} className="text-[#ffbfba]" />
                                                     Añadir Versión
@@ -1429,13 +1429,12 @@ const Home: React.FC = () => {
                                                     {/* Version Select */}
                                                     <div>
                                                         <label className={styles.inputLabel}>Versión de Minecraft</label>
-                                                        <div className="relative">
+                                                        <div className={styles.dropdownContainer}>
                                                             <div 
                                                                 onClick={() => setIsVersionSelectOpen(!isVersionSelectOpen)}
                                                                 className={cn(
-                                                                    styles.textInput,
-                                                                    "cursor-pointer flex items-center justify-between hover:bg-white/5 transition-colors",
-                                                                    isVersionSelectOpen ? "border-[#ffbfba] rounded-b-none" : ""
+                                                                    styles.dropdownTrigger,
+                                                                    isVersionSelectOpen ? styles.dropdownTriggerActive : ""
                                                                 )}
                                                             >
                                                                 <span className="truncate">
@@ -1443,7 +1442,7 @@ const Home: React.FC = () => {
                                                                         ? `${versionToAdd} ${versions.find((v: any) => v.id === versionToAdd)?.version_type ? `(${versions.find((v: any) => v.id === versionToAdd)?.version_type})` : ''}`
                                                                         : 'Seleccionar versión'}
                                                                 </span>
-                                                                <ChevronDown size={16} className="text-[#a1a1aa]" />
+                                                                <ChevronDown size={16} className={cn("text-[#a1a1aa] transition-transform duration-200", isVersionSelectOpen ? "rotate-180" : "")} />
                                                             </div>
                                                             
                                                             <AnimatePresence>
@@ -1455,7 +1454,7 @@ const Home: React.FC = () => {
                                                                             animate={{ opacity: 1, y: 0 }}
                                                                             exit={{ opacity: 0, y: -10 }}
                                                                             className={cn(
-                                                                                "absolute top-full left-0 right-0 bg-[#09090b] rounded-b-xl border-x border-b border-white/10 shadow-2xl max-h-60 overflow-y-auto z-[100] -mt-[1px]",
+                                                                                styles.dropdownMenu,
                                                                                 styles.dropdownScrollbar
                                                                             )}
                                                                         >
@@ -1467,8 +1466,8 @@ const Home: React.FC = () => {
                                                                                         setIsVersionSelectOpen(false);
                                                                                     }}
                                                                                     className={cn(
-                                                                                        "px-4 py-3 hover:bg-white/5 cursor-pointer text-white text-sm transition-colors flex items-center justify-between",
-                                                                                        versionToAdd === v.id ? "bg-white/10 text-[#ffbfba]" : ""
+                                                                                        styles.dropdownItem,
+                                                                                        versionToAdd === v.id ? styles.dropdownItemActive : ""
                                                                                     )}
                                                                                 >
                                                                                     <span>{v.id}</span>
@@ -1491,17 +1490,16 @@ const Home: React.FC = () => {
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div>
                                                                 <label className={styles.inputLabel}>Mod Loader</label>
-                                                                <div className="relative">
+                                                                <div className={styles.dropdownContainer}>
                                                                     <div 
                                                                         onClick={() => setIsAddVersionLoaderOpen(!isAddVersionLoaderOpen)}
                                                                         className={cn(
-                                                                            styles.textInput,
-                                                                            "cursor-pointer flex items-center justify-between hover:bg-white/5 transition-colors",
-                                                                            isAddVersionLoaderOpen ? "border-[#ffbfba] rounded-b-none" : ""
+                                                                            styles.dropdownTrigger,
+                                                                            isAddVersionLoaderOpen ? styles.dropdownTriggerActive : ""
                                                                         )}
                                                                     >
                                                                         <span className="truncate">{addVersionModLoader}</span>
-                                                                        <ChevronDown size={16} className="text-[#a1a1aa]" />
+                                                                        <ChevronDown size={16} className={cn("text-[#a1a1aa] transition-transform duration-200", isAddVersionLoaderOpen ? "rotate-180" : "")} />
                                                                     </div>
                                                                     
                                                                     <AnimatePresence>
@@ -1513,7 +1511,7 @@ const Home: React.FC = () => {
                                                                                     animate={{ opacity: 1, y: 0 }}
                                                                                     exit={{ opacity: 0, y: -10 }}
                                                                                     className={cn(
-                                                                                        "absolute top-full left-0 right-0 bg-[#09090b] rounded-b-xl border-x border-b border-white/10 shadow-2xl z-[100] -mt-[1px]",
+                                                                                        styles.dropdownMenu,
                                                                                         styles.dropdownScrollbar
                                                                                     )}
                                                                                 >
@@ -1525,8 +1523,8 @@ const Home: React.FC = () => {
                                                                                                 setIsAddVersionLoaderOpen(false);
                                                                                             }}
                                                                                             className={cn(
-                                                                                                "px-4 py-3 hover:bg-white/5 cursor-pointer text-white text-sm transition-colors",
-                                                                                                addVersionModLoader === loader ? "bg-white/10 text-[#ffbfba]" : ""
+                                                                                                styles.dropdownItem,
+                                                                                                addVersionModLoader === loader ? styles.dropdownItemActive : ""
                                                                                             )}
                                                                                         >
                                                                                             {loader}
@@ -1542,17 +1540,16 @@ const Home: React.FC = () => {
                                                             {addVersionModLoader !== 'Vanilla' && (
                                                                 <div>
                                                                     <label className={styles.inputLabel}>Versión del Loader</label>
-                                                                    <div className="relative">
+                                                                    <div className={styles.dropdownContainer}>
                                                                         <div 
                                                                             onClick={() => setIsAddVersionLoaderVersionOpen(!isAddVersionLoaderVersionOpen)}
                                                                             className={cn(
-                                                                                styles.textInput,
-                                                                                "cursor-pointer flex items-center justify-between hover:bg-white/5 transition-colors",
-                                                                                isAddVersionLoaderVersionOpen ? "border-[#ffbfba] rounded-b-none" : ""
+                                                                                styles.dropdownTrigger,
+                                                                                isAddVersionLoaderVersionOpen ? styles.dropdownTriggerActive : ""
                                                                             )}
                                                                         >
                                                                             <span className="truncate">{addVersionLoaderVersion || "Seleccionar"}</span>
-                                                                            <ChevronDown size={16} className="text-[#a1a1aa]" />
+                                                                            <ChevronDown size={16} className={cn("text-[#a1a1aa] transition-transform duration-200", isAddVersionLoaderVersionOpen ? "rotate-180" : "")} />
                                                                         </div>
                                                                         
                                                                         <AnimatePresence>
@@ -1564,7 +1561,7 @@ const Home: React.FC = () => {
                                                                                         animate={{ opacity: 1, y: 0 }}
                                                                                         exit={{ opacity: 0, y: -10 }}
                                                                                         className={cn(
-                                                                                            "absolute top-full left-0 right-0 bg-[#09090b] rounded-b-xl border-x border-b border-white/10 shadow-2xl max-h-60 overflow-y-auto z-[100] -mt-[1px]",
+                                                                                            styles.dropdownMenu,
                                                                                             styles.dropdownScrollbar
                                                                                         )}
                                                                                     >
@@ -1576,8 +1573,8 @@ const Home: React.FC = () => {
                                                                                                     setIsAddVersionLoaderVersionOpen(false);
                                                                                                 }}
                                                                                                 className={cn(
-                                                                                                    "px-4 py-3 hover:bg-white/5 cursor-pointer text-white text-sm transition-colors flex justify-between items-center",
-                                                                                                    addVersionLoaderVersion === v.version ? "bg-white/10 text-[#ffbfba]" : ""
+                                                                                                    styles.dropdownItem,
+                                                                                                    addVersionLoaderVersion === v.version ? styles.dropdownItemActive : ""
                                                                                                 )}
                                                                                             >
                                                                                                 <span>{v.version}</span>
@@ -1601,9 +1598,10 @@ const Home: React.FC = () => {
                                                         onClick={handleAddVersion}
                                                         disabled={!versionToAdd || (addVersionModLoader !== 'Vanilla' && !addVersionLoaderVersion)}
                                                         className={cn(styles.actionButton, styles.primaryButton)}
+                                                        style={{ marginTop: '3rem' }}
                                                     >
                                                         <Plus size={20} />
-                                                        Instalar y Usar
+                                                        Instalar
                                                     </button>
                                                 </div>
                                             </div>
@@ -1620,31 +1618,77 @@ const Home: React.FC = () => {
                                                     Gestiona las versiones de Minecraft instaladas.
                                                 </p>
 
-                                                <div className="space-y-3">
-                                                    {(activeInstance?.versions || [activeInstance?.version]).map((v) => (
-                                                        <div key={v} className="flex items-center justify-between p-4 bg-[#18181b] rounded-xl border border-white/5 hover:border-white/10 transition-colors">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="w-10 h-10 rounded-lg bg-[#27272a] flex items-center justify-center text-[#ffbfba]">
-                                                                    <Box size={20} />
+                                                <div className="flex flex-col gap-6">
+                                                    {(activeInstance?.versions || [activeInstance?.version]).map((v) => {
+                                                        const match = v.match(/^(.*) \((.*) (.*)\)$/);
+                                                        let mcVer = match ? match[1] : v;
+                                                        let loaderType = match ? match[2] : "Vanilla";
+                                                        let loaderVer = match ? match[3] : "";
+
+                                                        // Fallback for legacy instances where version is stored as "1.21.4" but has modloader metadata
+                                                        // Only apply if this version entry matches the instance's base version
+                                                        if (!match && v === activeInstance?.version && activeInstance?.modLoader) {
+                                                            loaderType = activeInstance.modLoader;
+                                                            loaderVer = activeInstance.modLoaderVersion || "";
+                                                            // Capitalize first letter if needed
+                                                            loaderType = loaderType.charAt(0).toUpperCase() + loaderType.slice(1);
+                                                        }
+
+                                                        const isActive = (v === (activeInstance?.selectedVersion || activeInstance?.version) || 
+                                                                          (v === activeInstance?.version && activeInstance?.selectedVersion?.startsWith(v + " (")));
+
+                                                        return (
+                                                            <div 
+                                                                key={v} 
+                                                                className={cn(
+                                                                    styles.versionCard,
+                                                                    isActive ? styles.versionCardActive : ""
+                                                                )}
+                                                            >
+                                                                <div className="flex items-center gap-5">
+                                                                    <div className={styles.versionIcon}>
+                                                                        <Box size={24} strokeWidth={1.5} />
+                                                                    </div>
+                                                                    <div className={styles.versionInfo}>
+                                                                        <span className={styles.versionTitle}>{mcVer}</span>
+                                                                        <div className={styles.versionMeta}>
+                                                                            <span className={cn(
+                                                                                styles.loaderPill,
+                                                                                loaderType === "Vanilla" ? styles.loaderPillVanilla : styles.loaderPillModded
+                                                                            )}>
+                                                                                {loaderType}
+                                                                            </span>
+                                                                            {loaderVer && (
+                                                                                <span className="text-xs text-[#71717a] font-mono">{loaderVer}</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <div>
-                                                                    <span className="text-white font-bold block">{v}</span>
-                                                                    {v === (activeInstance?.selectedVersion || activeInstance?.version) && (
-                                                                        <span className="text-xs text-green-400 font-medium">Versión Activa</span>
+
+                                                                <div className="flex items-center gap-4">
+                                                                    {isActive && (
+                                                                        <div className={styles.activeBadge}>
+                                                                            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                                                                            Activa
+                                                                        </div>
+                                                                    )}
+                                                                    
+                                                                    {(activeInstance?.versions || []).length > 1 && (
+                                                                        <button 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleRemoveVersion(v);
+                                                                            }}
+                                                                            className={styles.deleteVersionBtn}
+                                                                            title="Eliminar versión"
+                                                                        >
+                                                                            <Trash2 size={18} />
+                                                                        </button>
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                            {(activeInstance?.versions || []).length > 1 && (
-                                                                <button 
-                                                                    onClick={() => handleRemoveVersion(v)}
-                                                                    className="p-3 hover:bg-red-500/10 text-[#a1a1aa] hover:text-red-400 rounded-lg transition-colors"
-                                                                    title="Eliminar versión"
-                                                                >
-                                                                    <Trash2 size={18} />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         </div>
@@ -1662,49 +1706,52 @@ const Home: React.FC = () => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
+                            className={styles.bgSelectorOverlay}
                         >
-                            <div className="bg-[#1a1a1a] w-full h-full rounded-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl">
-                                <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-[#1a1a1a]">
-                                    <h3 className="text-xl font-bold text-white">Seleccionar Fondo</h3>
-                                    <button 
-                                        onClick={() => setShowBackgroundSelector(false)}
-                                        className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                            <div className={styles.bgSelectorHeader}>
+                                <h3 className={styles.bgSelectorTitle}>
+                                    <ImageIcon size={28} className="text-[#ffbfba]" />
+                                    Seleccionar Fondo
+                                </h3>
+                                <button 
+                                    onClick={() => setShowBackgroundSelector(false)}
+                                    className={styles.bgSelectorClose}
+                                >
+                                    <X size={20} />
+                                    <span>Cerrar</span>
+                                </button>
+                            </div>
+                            
+                            <div className={styles.bgSelectorContent}>
+                                <div className={styles.bgSelectorGrid}>
+                                    {/* Upload Option */}
+                                    <div 
+                                        onClick={handleSelectCustomBackground}
+                                        className={styles.bgUploadOption}
                                     >
-                                        <X size={24} />
-                                    </button>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-6">
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                                        {/* Upload Option */}
-                                        <div 
-                                            onClick={handleSelectCustomBackground}
-                                            className="h-40 w-full rounded-xl overflow-hidden cursor-pointer border-2 border-dashed border-white/10 transition-all hover:scale-105 hover:z-10 relative flex flex-col items-center justify-center gap-3 hover:bg-white/5 hover:border-[#ffbfba] group"
-                                        >
-                                            <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[#ffbfba]/20 transition-colors">
-                                                <Upload className="text-white/40 group-hover:text-[#ffbfba]" size={24} />
-                                            </div>
-                                            <span className="text-sm font-medium text-white/40 group-hover:text-white transition-colors">Subir Imagen</span>
+                                        <div className={styles.bgUploadIcon}>
+                                            <Upload size={24} />
                                         </div>
-
-                                        {BACKGROUNDS.map((bg) => (
-                                            <div 
-                                                key={bg}
-                                                onClick={() => handleUpdateBackground(bg)}
-                                                className={cn(
-                                                    "h-40 w-full rounded-xl overflow-hidden cursor-pointer border-2 transition-all hover:scale-105 hover:z-10 relative",
-                                                    activeInstance?.backgroundImage === bg ? "border-green-500" : "border-transparent hover:border-white/50"
-                                                )}
-                                            >
-                                                <img 
-                                                    src={`/assets/thumbnails/${bg}`} 
-                                                    alt={bg}
-                                                    className="w-full h-full object-cover"
-                                                    loading="lazy"
-                                                />
-                                            </div>
-                                        ))}
+                                        <span className={styles.bgUploadText}>Subir Imagen</span>
                                     </div>
+
+                                    {BACKGROUNDS.map((bg) => (
+                                        <div 
+                                            key={bg}
+                                            onClick={() => handleUpdateBackground(bg)}
+                                            className={cn(
+                                                styles.bgOption,
+                                                activeInstance?.backgroundImage === bg ? styles.bgOptionActive : ""
+                                            )}
+                                        >
+                                            <img 
+                                                src={`/assets/thumbnails/${bg}`} 
+                                                alt={bg}
+                                                className={styles.bgImage}
+                                                loading="lazy"
+                                            />
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </motion.div>

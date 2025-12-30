@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle, X } from 'lucide-react';
+import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle } from 'lucide-react';
 import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -191,67 +191,69 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                 <div className={styles.cardOverlay} />
             </div>
 
-            {/* Icon floating */}
-            <div className={styles.cardIcon}>
-                <img src={iconSrc} alt="" />
-            </div>
-
             {/* Body */}
             <div className={styles.cardBody}>
-                <div className={styles.cardInfo}>
-                    <h3 className={styles.cardTitle} title={instance.name}>{instance.name}</h3>
-                    <div className={styles.cardMeta}>
-                        <div 
-                            className={cn(styles.loaderBadge, "relative cursor-pointer hover:bg-white/10 transition-colors")}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if ((instance.versions || []).length > 1) {
-                                    setIsVersionDropdownOpen(!isVersionDropdownOpen);
-                                }
-                            }}
-                        >
-                            <Box size={12} />
-                            <span>{instance.selectedVersion || instance.version}</span>
-                            {(instance.versions || []).length > 1 && <ChevronDown size={12} className="ml-1 opacity-50" />}
+                <div className={styles.cardHeader}>
+                    {/* Icon floating */}
+                    <div className={styles.cardIcon}>
+                        <img src={iconSrc} alt="" />
+                    </div>
+                    
+                    <div className={styles.cardInfo}>
+                        <h3 className={styles.cardTitle} title={instance.name}>{instance.name}</h3>
+                        <div className={styles.cardMeta}>
+                            <div 
+                                className={cn(styles.loaderBadge, "relative cursor-pointer hover:bg-white/10 transition-colors")}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if ((instance.versions || []).length > 1) {
+                                        setIsVersionDropdownOpen(!isVersionDropdownOpen);
+                                    }
+                                }}
+                            >
+                                <Box size={12} />
+                                <span>{instance.selectedVersion || instance.version}</span>
+                                {(instance.versions || []).length > 1 && <ChevronDown size={12} className="ml-1 opacity-50" />}
 
-                            <AnimatePresence>
-                                {isVersionDropdownOpen && (
-                                    <>
-                                        <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setIsVersionDropdownOpen(false); }} />
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 5 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: 5 }}
-                                            className="absolute top-full left-0 mt-1 w-48 bg-[#1a1a1a] rounded-lg border border-white/10 shadow-xl max-h-48 overflow-y-auto z-50"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {(instance.versions || [instance.version]).map((v) => (
-                                                <div
-                                                    key={v}
-                                                    onClick={() => {
-                                                        handleVersionChange(v);
-                                                        setIsVersionDropdownOpen(false);
-                                                    }}
-                                                    className={cn(
-                                                        "px-3 py-2 hover:bg-white/5 cursor-pointer text-white text-xs transition-colors flex items-center justify-between",
-                                                        (instance.selectedVersion || instance.version) === v ? "bg-white/10 text-[#ffbfba]" : ""
-                                                    )}
-                                                >
-                                                    <span className="truncate">{v}</span>
-                                                    {(instance.selectedVersion || instance.version) === v && <Check size={12} />}
-                                                </div>
-                                            ))}
-                                        </motion.div>
-                                    </>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                        {instance.modLoader && (
-                            <div className={styles.loaderBadge}>
-                                <Cpu size={12} />
-                                <span className="capitalize">{instance.modLoader}</span>
+                                <AnimatePresence>
+                                    {isVersionDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setIsVersionDropdownOpen(false); }} />
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 5 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 5 }}
+                                                className={styles.versionDropdown}
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {(instance.versions || [instance.version]).map((v) => (
+                                                    <div
+                                                        key={v}
+                                                        onClick={() => {
+                                                            handleVersionChange(v);
+                                                            setIsVersionDropdownOpen(false);
+                                                        }}
+                                                        className={cn(
+                                                            styles.versionDropdownItem,
+                                                            (instance.selectedVersion || instance.version) === v ? styles.versionDropdownItemActive : ""
+                                                        )}
+                                                    >
+                                                        <span className="truncate">{v}</span>
+                                                        {(instance.selectedVersion || instance.version) === v && <Check size={14} />}
+                                                    </div>
+                                                ))}
+                                            </motion.div>
+                                        </>
+                                    )}
+                                </AnimatePresence>
                             </div>
-                        )}
+                            {instance.modLoader && (
+                                <div className={styles.loaderBadge}>
+                                    <Cpu size={12} />
+                                    <span className="capitalize">{instance.modLoader}</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -292,7 +294,6 @@ const Instances: React.FC = () => {
         memoryMin,
         memoryMax,
         setSelectedInstance,
-        consoleOutput,
         setLaunchStartTime
     } = useLauncherStore();
     const { user } = useAuthStore();
@@ -302,7 +303,6 @@ const Instances: React.FC = () => {
     const [viewingInstance, setViewingInstance] = React.useState<Instance | null>(null);
     const [toastMessage, setToastMessage] = React.useState<string | null>(null);
     const [toastType, setToastType] = React.useState<'success' | 'error'>('success');
-    const [showConsole, setShowConsole] = React.useState(false);
 
     React.useEffect(() => {
         loadData();
@@ -515,12 +515,6 @@ const Instances: React.FC = () => {
                 </div>
                 
                 <div className="flex items-center gap-4">
-                    <button 
-                        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                        onClick={() => setShowConsole(!showConsole)}
-                    >
-                        {showConsole ? 'Hide Logs' : 'Show Logs'}
-                    </button>
                     <div className={styles.searchWrapper}>
                         <input 
                             type="text" 
@@ -533,24 +527,6 @@ const Instances: React.FC = () => {
                     </div>
                 </div>
             </div>
-
-            {/* Console Overlay */}
-            {showConsole && (
-                <div className="fixed bottom-0 left-0 right-0 h-64 bg-black/90 border-t border-white/10 z-50 overflow-hidden flex flex-col font-mono text-xs">
-                    <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
-                        <span className="text-zinc-400">Launcher Logs</span>
-                        <button onClick={() => setShowConsole(false)} className="text-zinc-500 hover:text-white">
-                            <X size={14} />
-                        </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 space-y-1">
-                        {consoleOutput.map((log, i) => (
-                            <div key={i} className="text-zinc-300 break-all whitespace-pre-wrap">{log}</div>
-                        ))}
-                        <div ref={(el) => el?.scrollIntoView({ behavior: 'smooth' })} />
-                    </div>
-                </div>
-            )}
 
             {/* Content */}
             <div className={styles.content}>
