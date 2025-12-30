@@ -283,7 +283,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                                 className={cn(
                                     styles.installButton,
                                     isInstalled && !hasUpdate && type === 'mods' && !selectedVersion && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
-                                    isInstalled && hasUpdate && type === 'mods' && "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30"
+                                    isInstalled && hasUpdate && type === 'mods' && "bg-[#ffbfba]/20 text-[#ffbfba] hover:bg-[#ffbfba]/30 border-[#ffbfba]/30"
                                 )}
                             >
                                 {isInstalling ? (

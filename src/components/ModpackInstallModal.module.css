@@ -14,8 +14,8 @@
 }
 
 .modal {
-    background-color: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #18181b;
+    border: 1px solid #27272a;
     border-radius: 1rem;
     width: 100%;
     max-width: 32rem; /* Slightly wider for version list */
@@ -63,7 +63,7 @@
 }
 
 .closeButton:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: #27272a;
     color: white;
 }
 
@@ -96,8 +96,8 @@
 }
 
 .filterSelect {
-    background-color: #121212;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #18181b;
+    border: 1px solid #27272a;
     color: #e4e4e7;
     padding: 0.625rem;
     border-radius: 0.5rem;
@@ -108,7 +108,7 @@
 }
 
 .filterSelect:focus {
-    border-color: #ffbfba;
+    border-color: #3f3f46;
 }
 
 /* Version List */
@@ -130,13 +130,13 @@
 }
 
 .versionList::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: #27272a;
     border-radius: 3px;
 }
 
 .versionCard {
-    background-color: #121212;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: #18181b;
+    border: 1px solid #27272a;
     border-radius: 0.75rem;
     padding: 1rem;
     cursor: pointer;
@@ -145,13 +145,13 @@
 }
 
 .versionCard:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.1);
+    background-color: #27272a;
+    border-color: #3f3f46;
 }
 
 .versionCardSelected {
-    background-color: rgba(255, 191, 186, 0.1);
-    border-color: #ffbfba;
+    background-color: #27272a;
+    border-color: #3f3f46;
 }
 
 .versionName {
@@ -168,7 +168,7 @@
 }
 
 .checkIcon {
-    color: #ffbfba;
+    color: white;
 }
 
 .emptyState {
@@ -176,9 +176,9 @@
     padding: 2rem;
     color: #71717a;
     font-size: 0.875rem;
-    background-color: #121212;
+    background-color: #18181b;
     border-radius: 0.75rem;
-    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border: 1px dashed #27272a;
 }
 
 /* Loading & Installing States */
@@ -190,7 +190,7 @@
 }
 
 .spinner {
-    color: #ffbfba;
+    color: white;
     animation: spin 1s linear infinite;
 }
 
@@ -299,7 +299,7 @@
     flex: 1;
     padding: 0.75rem;
     background-color: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #27272a;
     color: #e4e4e7;
     border-radius: 0.5rem;
     font-weight: 500;
@@ -309,8 +309,8 @@
 }
 
 .cancelButton:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.2);
+    background-color: #27272a;
+    border-color: #3f3f46;
 }
 
 .installButton {

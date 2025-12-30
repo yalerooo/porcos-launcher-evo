@@ -3,14 +3,14 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    background-color: #0f0f0f;
+    background-color: #09090b;
     overflow: hidden;
 }
 
 .topBar {
     padding: 1rem 2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    background-color: #121212;
+    border-bottom: 1px solid #27272a;
+    background-color: #09090b;
     flex-shrink: 0;
 }
 
@@ -31,7 +31,7 @@
 
 .backButton:hover {
     color: white;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: #27272a;
 }
 
 .scrollContent {
@@ -54,7 +54,7 @@
     height: 8rem;
     border-radius: 1rem;
     object-fit: cover;
-    background-color: #252525;
+    background-color: #27272a;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
@@ -87,12 +87,12 @@
 }
 
 .categoryTag {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: #27272a;
     padding: 0.25rem 0.75rem;
     border-radius: 9999px;
     font-size: 0.75rem;
     color: #a1a1aa;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid #3f3f46;
 }
 
 .categories {
@@ -121,8 +121,9 @@
 }
 
 .installButton:hover:not(:disabled) {
-    filter: brightness(1.1);
     transform: translateY(-1px);
+    background-color: #ffdcd9;
+    box-shadow: 0 4px 12px rgba(255, 191, 186, 0.2);
 }
 
 .installButton:disabled {
@@ -150,12 +151,12 @@
     border-radius: 0.5rem;
     cursor: pointer;
     transition: all 0.2s;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid #27272a;
 }
 
 .screenshot:hover {
     transform: scale(1.02);
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: #3f3f46;
 }
 
 .actions {
@@ -171,9 +172,9 @@
     justify-content: space-between;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: #18181b;
     color: white;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid #27272a;
     border-radius: 0.75rem;
     font-weight: 500;
     font-size: 0.875rem;
@@ -183,8 +184,8 @@
 }
 
 .versionSelector:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
+    background-color: #27272a;
+    border-color: #3f3f46;
 }
 
 .versionSelector:disabled {
@@ -200,8 +201,8 @@
     min-width: 250px;
     max-height: 300px;
     overflow-y: auto;
-    background-color: #1a1a1a;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #18181b;
+    border: 1px solid #27272a;
     border-radius: 0.75rem;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
     z-index: 50;
@@ -224,15 +225,15 @@
 }
 
 .versionOption:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: #27272a;
     color: white;
 }
 
 .versionOptionActive {
-    background-color: rgba(255, 191, 186, 0.1);
-    color: #ffbfba;
+    background-color: #27272a;
+    color: white;
 }
 
 .versionOptionActive:hover {
-    background-color: rgba(255, 191, 186, 0.2);
+    background-color: #3f3f46;
 }

@@ -84,6 +84,7 @@ interface InstalledMod {
     file: string;
     version?: string;
     source?: string;
+    versionId?: string;
 }
 
 const Mods: React.FC = () => {
@@ -116,7 +117,8 @@ const Mods: React.FC = () => {
     const [installedSlugs, setInstalledSlugs] = useState<Map<string, InstalledMod>>(new Map());
     const [updatesAvailable, setUpdatesAvailable] = useState<Map<string, boolean>>(new Map());
     const [installingModId, setInstallingModId] = useState<string | null>(null);
-    const [installedDependencies, setInstalledDependencies] = useState<string[]>([]);
+    const [installedDependencies, setInstalledDependencies] = useState<any[]>([]);
+    const [isUpdatingAll, setIsUpdatingAll] = useState(false);
 
     // Mock data
     const [items, setItems] = useState<any[]>([]);
@@ -138,14 +140,22 @@ const Mods: React.FC = () => {
                 // Check if installed
                 let installed = installedMods.get(item.id);
                 if (!installed && item.original?.slug) {
-                    installed = installedSlugs.get(item.original.slug);
+                    installed = installedSlugs.get(item.original.slug.toLowerCase());
                 }
 
                 if (installed) {
                     try {
                         if (item.source === 'modrinth') {
                             // Fetch compatible versions
-                            const loaders = filterLoader ? `["${filterLoader.toLowerCase()}"]` : '[]';
+                            let loadersList = [];
+                            if (filterLoader) {
+                                const l = filterLoader.toLowerCase();
+                                loadersList.push(l);
+                                if (l === 'quilt') loadersList.push('fabric'); // Quilt runs Fabric
+                                if (l === 'neoforge') loadersList.push('forge'); // NeoForge often runs Forge
+                            }
+                            
+                            const loaders = loadersList.length > 0 ? JSON.stringify(loadersList) : '[]';
                             const versions = `["${filterVersion}"]`;
                             const url = `https://api.modrinth.com/v2/project/${item.id}/version?loaders=${encodeURIComponent(loaders)}&game_versions=${encodeURIComponent(versions)}`;
                             
@@ -154,8 +164,14 @@ const Mods: React.FC = () => {
                             
                             if (data && data.length > 0) {
                                 const latest = data[0];
-                                // Check if filename matches (strongest check)
+                                
+                                // Check Version ID if available (most accurate)
+                                if ((installed as any).versionId && latest.id === (installed as any).versionId) {
+                                     // Match
+                                     return;
+                                }
 
+                                // Check if filename matches (strongest check)
                                 const isFileMatch = latest.files.some((f: any) => f.filename === installed.file);
                                 const isVersionMatch = latest.version_number === installed.version;
 
@@ -179,6 +195,11 @@ const Mods: React.FC = () => {
                                 });
 
                                 if (compatibleFile) {
+                                    // Check Version ID (File ID)
+                                    if ((installed as any).versionId && compatibleFile.id.toString() === (installed as any).versionId) {
+                                        return;
+                                    }
+
                                     // Compare filename as we might not have version string in installedMod for CF sometimes
                                     // But installed.file should be accurate
                                     const isFileMatch = compatibleFile.fileName === installed.file;
@@ -223,7 +244,12 @@ const Mods: React.FC = () => {
                     const data = JSON.parse(content);
                     if (data.mods && Array.isArray(data.mods)) {
                         data.mods.forEach((m: any) => {
-                            newInstalledMods.set(m.id, { file: m.file, version: m.version, source: m.source });
+                            newInstalledMods.set(m.id, { 
+                                file: m.file, 
+                                version: m.version, 
+                                source: m.source,
+                                versionId: m.versionId 
+                            });
                         });
                     }
                 }
@@ -244,11 +270,29 @@ const Mods: React.FC = () => {
                             try {
                                 const fullPath = await join(modsDir, file.name);
                                 const metadata = await invoke('get_mod_metadata', { path: fullPath }) as any;
-                                if (metadata.id) {
-                                    const modInfo = { file: file.name, version: metadata.version };
-                                    newInstalledSlugs.set(metadata.id, modInfo);
+                                
+                                let modId = metadata.id;
+                                
+                                // Fallback: Guess ID from filename if metadata is missing
+                                if (!modId) {
+                                    // Matches "name-version.jar" or "name-1.0.0.jar"
+                                    // Tries to grab everything before the first digit or version-like pattern
+                                    const match = file.name.match(/^([a-zA-Z0-9_-]+?)[-_.](?=\d)/);
+                                    if (match) {
+                                        modId = match[1];
+                                    } else {
+                                        // Fallback: everything before .jar
+                                        modId = file.name.replace('.jar', '');
+                                    }
+                                }
+
+                                if (modId) {
+                                    const normalizedId = modId.toLowerCase();
+                                    const modInfo = { file: file.name, version: metadata.version || 'unknown' };
+                                    
+                                    newInstalledSlugs.set(normalizedId, modInfo);
                                     // Also add as ID just in case slug == id (rare for CF, common for Modrinth internal)
-                                    newInstalledMods.set(metadata.id, modInfo); 
+                                    newInstalledMods.set(normalizedId, modInfo); 
                                 }
                             } catch (e) {
                                 // Ignore errors reading metadata
@@ -299,7 +343,8 @@ const Mods: React.FC = () => {
             setInstalledMods(prev => new Map(prev).set(modInfo.id, { 
                 file: modInfo.file, 
                 version: modInfo.version, 
-                source: modInfo.source 
+                source: modInfo.source,
+                versionId: modInfo.versionId
             }));
 
             // Clear update flag
@@ -320,9 +365,9 @@ const Mods: React.FC = () => {
 
     // Auto-set filters when switching to Mods mode with an instance selected
     useEffect(() => {
-        if (searchType === 'mods') {
+        if (searchType === 'mods' || searchType === 'updates') {
             // Reset active source if it was Porcos
-            if (activeSource === 'porcos') {
+            if (activeSource === 'porcos' && searchType === 'mods') {
                 setActiveSource('modrinth');
             }
 
@@ -604,6 +649,10 @@ const Mods: React.FC = () => {
     };
 
     useEffect(() => {
+        // Only set loading if we are actually changing search parameters that require a fetch
+        // We don't want to reload on installedMods change if we are just installing
+        if (installingModId) return;
+
         setIsLoading(true);
         
         const timer = setTimeout(() => {
@@ -619,15 +668,20 @@ const Mods: React.FC = () => {
         }, 500); // Debounce
 
         return () => clearTimeout(timer);
-    }, [searchQuery, activeSource, searchType, filterVersion, filterLoader, filterCategory, page, installedMods]);
+    }, [searchQuery, activeSource, searchType, filterVersion, filterLoader, filterCategory, page]); // Removed installedMods dependency
 
     const handleSearch = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
     };
 
-    const installModrinth = async (projectId: string, version: string, loader: string, instancePath: string, visited: Set<string> = new Set(), specificVersionId?: string): Promise<string[]> => {
+    const installModrinth = async (projectId: string, version: string, loader: string, instancePath: string, visited: Set<string> = new Set(), specificVersionId?: string, isDependency: boolean = false): Promise<any[]> => {
         if (visited.has(projectId)) return [];
         visited.add(projectId);
+
+        // If it's a dependency and already installed, skip
+        if (isDependency && installedMods.has(projectId)) {
+            return [];
+        }
 
         const url = `https://api.modrinth.com/v2/project/${projectId}/version`;
         const responseText = await invoke('fetch_cors', { url }) as string;
@@ -651,13 +705,13 @@ const Mods: React.FC = () => {
             return [];
         }
 
-        let installedFiles: string[] = [];
+        let installedFiles: any[] = [];
 
         // Install dependencies first
         if (compatibleVersion.dependencies) {
             for (const dep of compatibleVersion.dependencies) {
                 if (dep.dependency_type === "required" && dep.project_id) {
-                    const deps = await installModrinth(dep.project_id, version, loader, instancePath, visited);
+                    const deps = await installModrinth(dep.project_id, version, loader, instancePath, visited, undefined, true);
                     installedFiles = [...installedFiles, ...deps];
                 }
             }
@@ -668,6 +722,17 @@ const Mods: React.FC = () => {
         
         await invoke('download_file', { url: file.url, path: filePath });
         
+        // Fetch project info for icon/name
+        let icon = undefined;
+        let name = file.filename;
+        try {
+             const projectUrl = `https://api.modrinth.com/v2/project/${projectId}`;
+             const projectRes = await invoke('fetch_cors', { url: projectUrl }) as string;
+             const projectData = JSON.parse(projectRes);
+             icon = projectData.icon_url;
+             name = projectData.title;
+        } catch (e) {}
+
         await saveInstalledMod({
             id: projectId,
             source: 'modrinth',
@@ -676,13 +741,22 @@ const Mods: React.FC = () => {
             file: file.filename
         });
 
-        installedFiles.push(file.filename);
+        installedFiles.push({
+            name,
+            file: file.filename,
+            icon
+        });
         return installedFiles;
     };
 
-    const installCurseForge = async (modId: string, version: string, loader: string, instancePath: string, visited: Set<string> = new Set(), specificFileId?: number): Promise<string[]> => {
+    const installCurseForge = async (modId: string, version: string, loader: string, instancePath: string, visited: Set<string> = new Set(), specificFileId?: number, isDependency: boolean = false): Promise<any[]> => {
         if (visited.has(modId)) return [];
         visited.add(modId);
+
+        // If it's a dependency and already installed, skip
+        if (isDependency && installedMods.has(modId)) {
+            return [];
+        }
 
         const url = `https://api.curseforge.com/v1/mods/${modId}/files`;
         const responseText = await invoke('fetch_cors', { 
@@ -716,13 +790,13 @@ const Mods: React.FC = () => {
             return [];
         }
 
-        let installedFiles: string[] = [];
+        let installedFiles: any[] = [];
 
         // Install dependencies
         if (compatibleFile.dependencies) {
             for (const dep of compatibleFile.dependencies) {
                 if (dep.relationType === 3) { // RequiredDependency
-                    const deps = await installCurseForge(dep.modId.toString(), version, loader, instancePath, visited);
+                    const deps = await installCurseForge(dep.modId.toString(), version, loader, instancePath, visited, undefined, true);
                     installedFiles = [...installedFiles, ...deps];
                 }
             }
@@ -730,6 +804,23 @@ const Mods: React.FC = () => {
 
         const filePath = await join(instancePath, 'mods', compatibleFile.fileName);
         await invoke('download_file', { url: compatibleFile.downloadUrl, path: filePath });
+
+        // Fetch project info for icon/name
+        let icon = undefined;
+        let name = compatibleFile.displayName;
+        try {
+             const projectUrl = `https://api.curseforge.com/v1/mods/${modId}`;
+             const projectRes = await invoke('fetch_cors', { 
+                url: projectUrl,
+                headers: {
+                    'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
+                    'Accept': 'application/json'
+                }
+             }) as string;
+             const projectData = JSON.parse(projectRes);
+             icon = projectData.data.logo?.url;
+             name = projectData.data.name;
+        } catch (e) {}
 
         await saveInstalledMod({
             id: modId,
@@ -739,7 +830,11 @@ const Mods: React.FC = () => {
             file: compatibleFile.fileName
         });
 
-        installedFiles.push(compatibleFile.fileName);
+        installedFiles.push({
+            name,
+            file: compatibleFile.fileName,
+            icon
+        });
         return installedFiles;
     };
 
@@ -757,7 +852,10 @@ const Mods: React.FC = () => {
             const instancePath = await invoke('get_instance_path', { id: targetInstanceId }) as string;
             
             // Check if update (delete old)
-            const installed = installedMods.get(item.id) || (item.original?.slug && installedSlugs.has(item.original.slug) ? installedSlugs.get(item.original.slug) : null);
+            let installed = installedMods.get(item.id);
+            if (!installed && item.original?.slug) {
+                installed = installedSlugs.get(item.original.slug.toLowerCase());
+            }
             
             if (installed) {
                 // Delete old file
@@ -768,7 +866,7 @@ const Mods: React.FC = () => {
                 }
             }
 
-            let installedFiles: string[] = [];
+            let installedFiles: any[] = [];
             if (item.source === 'modrinth') {
                 installedFiles = await installModrinth(item.id, filterVersion, filterLoader, instancePath, new Set(), selectedVersion?.id);
             } else if (item.source === 'curseforge') {
@@ -776,8 +874,14 @@ const Mods: React.FC = () => {
             }
 
             setInstalledModName(item.name);
-            setInstalledDependencies(installedFiles.slice(1)); // Exclude main mod
-            setShowSuccessModal(true);
+            // Exclude main mod (last item) to show only dependencies
+            const dependencies = installedFiles.slice(0, -1);
+            setInstalledDependencies(dependencies); 
+            
+            // Only show modal if there are dependencies installed
+            if (dependencies.length > 0) {
+                setShowSuccessModal(true);
+            }
             
         } catch (error) {
             console.error("Failed to install mod:", error);
@@ -791,8 +895,13 @@ const Mods: React.FC = () => {
         const updates = items.filter(item => updatesAvailable.get(item.id));
         if (updates.length === 0) return;
 
-        for (const item of updates) {
-            await handleInstall(item);
+        setIsUpdatingAll(true);
+        try {
+            for (const item of updates) {
+                await handleInstall(item);
+            }
+        } finally {
+            setIsUpdatingAll(false);
         }
     };
 
@@ -906,10 +1015,15 @@ const Mods: React.FC = () => {
                         {searchType === 'updates' && items.filter(item => updatesAvailable.get(item.id)).length > 0 && (
                             <button 
                                 onClick={handleUpdateAll}
-                                className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-colors text-sm font-medium"
+                                disabled={isUpdatingAll}
+                                className={styles.updateAllButton}
                             >
-                                <RefreshCw size={14} />
-                                Actualizar Todo ({items.filter(item => updatesAvailable.get(item.id)).length})
+                                {isUpdatingAll ? (
+                                    <Loader2 className="animate-spin" size={14} />
+                                ) : (
+                                    <RefreshCw size={14} />
+                                )}
+                                {isUpdatingAll ? 'Actualizando...' : `Actualizar Todo (${items.filter(item => updatesAvailable.get(item.id)).length})`}
                             </button>
                         )}
                     </div>
@@ -946,7 +1060,7 @@ const Mods: React.FC = () => {
                 )}
             </div>
 
-            <div className={cn(styles.contentArea, activeSource === 'porcos' && styles.contentAreaFull)}>
+            <div className={cn(styles.contentArea, (activeSource === 'porcos' || searchType === 'updates') && styles.contentAreaFull)}>
                 {/* Sidebar */}
                 {(searchType === 'mods' || searchType === 'modpacks') && activeSource !== 'porcos' && (
                     <div className={styles.sidebar}>
@@ -994,7 +1108,7 @@ const Mods: React.FC = () => {
 
                 {/* List & Pagination */}
                 
-                    <div className={cn(styles.resultsList, activeSource === 'porcos' && styles.fullWidth)}>
+                    <div className={cn(styles.resultsList, (activeSource === 'porcos' || searchType === 'updates') && styles.fullWidth)}>
                         {isLoading ? (
                             <div className={styles.loadingContainer}>
                                 <Loader2 className={styles.loadingSpinner} size={40} />
@@ -1004,7 +1118,7 @@ const Mods: React.FC = () => {
                                 {items
                                     .filter(item => searchType !== 'updates' || updatesAvailable.get(item.id))
                                     .map((item) => {
-                                    const isInstalled = installedMods.has(item.id) || (item.original?.slug && installedSlugs.has(item.original.slug));
+                                    const isInstalled = installedMods.has(item.id) || (item.original?.slug && installedSlugs.has(item.original.slug.toLowerCase()));
                                     const hasUpdate = updatesAvailable.get(item.id);
                                     
                                     return (
@@ -1055,7 +1169,7 @@ const Mods: React.FC = () => {
                                                     styles.installButton,
                                                     searchType === 'modpacks' ? styles.installButtonModpacks : styles.installButtonMods,
                                                     isInstalled && !hasUpdate && searchType === 'mods' && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
-                                                    isInstalled && hasUpdate && searchType === 'mods' && "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30"
+                                                    isInstalled && hasUpdate && searchType === 'mods' && "bg-[#ffbfba]/20 text-[#ffbfba] hover:bg-[#ffbfba]/30 border-[#ffbfba]/30"
                                                 )}
                                             >
                                                 {installingModId === item.id ? (
@@ -1107,7 +1221,7 @@ const Mods: React.FC = () => {
 
                     {/* Pagination Bar - Always visible if items exist */}
                     {!isLoading && items.length > 0 && searchType !== 'updates' && (
-                        <div className={cn(styles.paginationBar, activeSource === 'porcos' && styles.fullWidth)}>
+                        <div className={cn(styles.paginationBar, (activeSource === 'porcos' || searchType === 'updates') && styles.fullWidth)}>
                             <button
                                 onClick={() => setPage(p => Math.max(0, p - 1))}
                                 disabled={page === 0}

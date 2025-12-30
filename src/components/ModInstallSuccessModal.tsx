@@ -1,14 +1,20 @@
 import React from 'react';
-import { Layers, PackageCheck, FileCode } from 'lucide-react';
+import { Layers, PackageCheck, FileCode, Box } from 'lucide-react';
 import { motion } from 'framer-motion';
 import styles from './ModInstallSuccessModal.module.css';
+
+export interface InstalledDependency {
+    name: string;
+    file: string;
+    icon?: string;
+}
 
 interface ModInstallSuccessModalProps {
     isOpen: boolean;
     onClose: () => void;
     modName: string;
     instanceName: string;
-    dependencies?: string[];
+    dependencies?: InstalledDependency[];
 }
 
 const ModInstallSuccessModal: React.FC<ModInstallSuccessModalProps> = ({ isOpen, onClose, modName, instanceName, dependencies = [] }) => {
@@ -43,8 +49,15 @@ const ModInstallSuccessModal: React.FC<ModInstallSuccessModalProps> = ({ isOpen,
                             <div className={styles.dependencyList}>
                                 {dependencies.map((dep, i) => (
                                     <div key={i} className={styles.dependencyItem}>
-                                        <FileCode size={16} className={styles.fileIcon} />
-                                        <span className={styles.fileName}>{dep}</span>
+                                        {dep.icon ? (
+                                            <img src={dep.icon} alt={dep.name} className={styles.dependencyIcon} />
+                                        ) : (
+                                            <Box size={24} className={styles.dependencyPlaceholderIcon} />
+                                        )}
+                                        <div className={styles.dependencyInfo}>
+                                            <span className={styles.dependencyName}>{dep.name}</span>
+                                            <span className={styles.fileName}>{dep.file}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
