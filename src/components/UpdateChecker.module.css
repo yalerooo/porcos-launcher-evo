@@ -1,0 +1,290 @@
+.overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.modal {
+    background-color: #09090b;
+    width: 100%;
+    max-width: 460px;
+    border-radius: 16px;
+    border: 1px solid #27272a;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.8);
+    position: relative;
+    animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalEnter {
+    from {
+        opacity: 0;
+        transform: scale(0.98) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.glowEffect {
+    display: none;
+}
+
+.content {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    background-color: #18181b;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    border-bottom: 1px solid #27272a;
+}
+
+.iconContainer {
+    display: none;
+}
+
+.iconContainer::after {
+    display: none;
+}
+
+.title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+    line-height: 1.2;
+    background: none;
+    -webkit-text-fill-color: initial;
+}
+
+.subtitle {
+    color: #a1a1aa;
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.versionCard {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    background: none;
+    border: none;
+    border-radius: 0;
+}
+
+.versionRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: #18181b;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    border: 1px solid #27272a;
+}
+
+.versionInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.versionInfoRight {
+    align-items: flex-end;
+    text-align: right;
+}
+
+.label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.labelNew {
+    color: #ffbfba;
+    text-shadow: none;
+}
+
+.versionNumber {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    color: #d4d4d8;
+    font-weight: 500;
+}
+
+.versionNumberNew {
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-shadow: none;
+}
+
+.separator {
+    flex: 1;
+    height: 1px;
+    background: #27272a;
+    margin: 0 1rem;
+    position: relative;
+}
+
+.separatorDot {
+    display: none;
+}
+
+.separator::after {
+    content: '→';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #18181b;
+    color: #52525b;
+    padding: 0 0.5rem;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.notesSection {
+    background-color: #18181b;
+    border-radius: 12px;
+    padding: 1rem;
+    border: 1px solid #27272a;
+    margin-top: 0;
+}
+
+.notesContent {
+    font-size: 0.9rem;
+    color: #a1a1aa;
+    line-height: 1.6;
+    max-height: 100px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+/* Scrollbar */
+.notesContent::-webkit-scrollbar {
+    width: 4px;
+}
+.notesContent::-webkit-scrollbar-track {
+    background: transparent;
+}
+.notesContent::-webkit-scrollbar-thumb {
+    background: #3f3f46;
+    border-radius: 4px;
+}
+
+.actions {
+    display: flex;
+    gap: 1rem;
+    padding: 0 2rem 2rem 2rem;
+    margin-top: 0;
+}
+
+.buttonSecondary {
+    flex: 1;
+    height: 3rem;
+    border-radius: 8px;
+    background-color: transparent;
+    color: #a1a1aa;
+    font-weight: 500;
+    border: 1px solid #27272a;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+}
+
+.buttonSecondary:hover {
+    border-color: #52525b;
+    color: #fff;
+    background-color: rgba(255,255,255,0.02);
+}
+
+.buttonPrimary {
+    flex: 1;
+    height: 3rem;
+    border-radius: 8px;
+    background: #ffbfba;
+    color: #18181b;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    box-shadow: none;
+    font-size: 0.9rem;
+}
+
+.buttonPrimary:hover {
+    background-color: #ffdcd9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 191, 186, 0.2);
+    filter: none;
+}
+
+.progressContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0 2rem 2rem 2rem;
+}
+
+.progressHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #d4d4d8;
+}
+
+.progressValue {
+    font-family: 'JetBrains Mono', monospace;
+    color: #ffbfba;
+    font-weight: 600;
+}
+
+.track {
+    height: 6px;
+    background-color: #27272a;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+    border: none;
+}
+
+.bar {
+    height: 100%;
+    background: #ffbfba;
+    border-radius: 3px;
+    box-shadow: none;
+}
+
+.progressFooter {
+    font-size: 0.8rem;
+    color: #71717a;
+    text-align: center;
+    margin: 0;
+}
+
+

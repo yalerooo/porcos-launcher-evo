@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { getVersion } from '@tauri-apps/api/app';
-import { open } from '@tauri-apps/plugin-shell';
 import { exit } from '@tauri-apps/plugin-process';
 import { join, appCacheDir } from '@tauri-apps/api/path';
 
@@ -29,6 +29,8 @@ const compareVersions = (v1: string, v2: string) => {
     return 0;
 };
 
+import styles from './UpdateChecker.module.css';
+
 const UpdateChecker: React.FC = () => {
     const [updateAvailable, setUpdateAvailable] = useState<UpdateData | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -42,7 +44,9 @@ const UpdateChecker: React.FC = () => {
                 const current = await getVersion();
                 setCurrentVersion(current);
 
-                const responseText = await invoke('fetch_cors', { url: UPDATE_JSON_URL }) as string;
+                // Add timestamp to prevent caching
+                const urlWithTimestamp = `${UPDATE_JSON_URL}?t=${new Date().getTime()}`;
+                const responseText = await invoke('fetch_cors', { url: urlWithTimestamp }) as string;
                 const data = JSON.parse(responseText);
 
                 // Assume JSON structure: { version: "1.0.1", date: "...", downloadUrl: "..." }
@@ -67,36 +71,39 @@ const UpdateChecker: React.FC = () => {
         setIsDownloading(true);
         setDownloadProgress(0);
 
+        const downloadId = "update-download";
+        let unlisten: (() => void) | undefined;
+
         try {
             const cacheDir = await appCacheDir();
             const fileName = `PorcosLauncher_Setup_${updateAvailable.version}.exe`;
             const filePath = await join(cacheDir, fileName);
 
-            // We don't have progress callback for download_file yet in the backend command usually, 
-            // unless implemented. The current backend `download_file` likely just awaits.
-            // So we'll fake progress or just show "Downloading..."
-            
-            // Fake progress for UX
-            const progressInterval = setInterval(() => {
-                setDownloadProgress(prev => {
-                    if (prev >= 90) return prev;
-                    return prev + 10;
-                });
-            }, 500);
+            // Listen for download progress
+            unlisten = await listen<{ id: string; progress: number }>('download-progress', (event) => {
+                if (event.payload.id === downloadId) {
+                    setDownloadProgress(Math.round(event.payload.progress));
+                }
+            });
 
-            await invoke('download_file', { url: updateAvailable.downloadUrl, path: filePath });
+            await invoke('download_file', { 
+                url: updateAvailable.downloadUrl, 
+                path: filePath,
+                id: downloadId 
+            });
             
-            clearInterval(progressInterval);
+            if (unlisten) unlisten();
             setDownloadProgress(100);
 
             // Run the installer
-            await open(filePath);
+            await invoke('run_installer', { path: filePath });
             
             // Close the app
             await exit(0);
 
         } catch (e) {
             console.error("Update failed:", e);
+            if (unlisten) unlisten();
             setIsDownloading(false);
             alert("Error al descargar la actualización. Por favor, inténtalo manualmente.");
         }
@@ -110,71 +117,82 @@ const UpdateChecker: React.FC = () => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8"
+                className={styles.overlay}
             >
                 <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
-                    className="bg-[#1a1a1a] w-full max-w-md rounded-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl"
+                    initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                    className={styles.modal}
                 >
-                    <div className="p-6 flex flex-col gap-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-[#ffbfba]/20 flex items-center justify-center text-[#ffbfba]">
-                                <Download size={24} />
-                            </div>
+                    {/* Decorative background glow */}
+                    <div className={styles.glowEffect} />
+                    
+                    <div className={styles.content}>
+                        {/* Header */}
+                        <div className={styles.header}>
                             <div>
-                                <h3 className="text-xl font-bold text-white">Actualización Disponible</h3>
-                                <p className="text-[#a1a1aa]">Nueva versión {updateAvailable.version}</p>
+                                <h3 className={styles.title}>¡Actualización Disponible!</h3>
+                                <p className={styles.subtitle}>Una nueva versión de Porcos Launcher está lista para instalar.</p>
                             </div>
                         </div>
 
-                        <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="text-[#a1a1aa]">Versión Actual:</span>
-                                <span className="text-white font-mono">{currentVersion}</span>
+                        {/* Version Info Card */}
+                        <div className={styles.versionCard}>
+                            <div className={styles.versionRow}>
+                                <div className={styles.versionInfo}>
+                                    <span className={styles.label}>Versión Actual</span>
+                                    <span className={styles.versionNumber}>{currentVersion}</span>
+                                </div>
+                                <div className={styles.separator}>
+                                    <div className={styles.separatorDot} />
+                                </div>
+                                <div className={`${styles.versionInfo} ${styles.versionInfoRight}`}>
+                                    <span className={`${styles.label} ${styles.labelNew}`}>Nueva Versión</span>
+                                    <span className={`${styles.versionNumber} ${styles.versionNumberNew}`}>{updateAvailable.version}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="text-[#a1a1aa]">Nueva Versión:</span>
-                                <span className="text-[#ffbfba] font-mono font-bold">{updateAvailable.version}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                                <span className="text-[#a1a1aa]">Fecha:</span>
-                                <span className="text-white">{updateAvailable.date}</span>
-                            </div>
+                            
                             {updateAvailable.notes && (
-                                <div className="mt-3 pt-3 border-t border-white/10 text-sm text-[#a1a1aa]">
-                                    {updateAvailable.notes}
+                                <div className={styles.notesSection}>
+                                    <span className={styles.label} style={{ display: 'block', marginBottom: '0.5rem' }}>Novedades</span>
+                                    <div className={styles.notesContent}>
+                                        {updateAvailable.notes}
+                                    </div>
                                 </div>
                             )}
                         </div>
 
+                        {/* Actions */}
                         {isDownloading ? (
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-white">Descargando...</span>
-                                    <span className="text-[#ffbfba]">{downloadProgress}%</span>
+                            <div className={styles.progressContainer}>
+                                <div className={styles.progressHeader}>
+                                    <span className={styles.progressText}>Descargando actualización...</span>
+                                    <span className={styles.progressValue}>{downloadProgress}%</span>
                                 </div>
-                                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                                <div className={styles.track}>
                                     <motion.div 
-                                        className="h-full bg-[#ffbfba]"
+                                        className={styles.bar}
                                         initial={{ width: 0 }}
                                         animate={{ width: `${downloadProgress}%` }}
+                                        transition={{ type: "spring", stiffness: 50 }}
                                     />
                                 </div>
+                                <p className={styles.progressFooter}>El lanzador se reiniciará automáticamente al finalizar.</p>
                             </div>
                         ) : (
-                            <div className="flex gap-3">
+                            <div className={styles.actions}>
                                 <button
                                     onClick={() => setShowModal(false)}
-                                    className="flex-1 h-12 rounded-xl bg-[#27272a] text-white hover:bg-[#3f3f46] transition-colors font-medium"
+                                    className={styles.buttonSecondary}
                                 >
-                                    Más tarde
+                                    Recordármelo luego
                                 </button>
                                 <button
                                     onClick={handleUpdate}
-                                    className="flex-1 h-12 bg-[#ffbfba] text-[#1a1a1a] rounded-xl font-bold hover:brightness-110 transition-all shadow-[0_0_15px_rgba(255,191,186,0.3)]"
+                                    className={styles.buttonPrimary}
                                 >
+                                    <Download size={20} />
                                     Actualizar Ahora
                                 </button>
                             </div>

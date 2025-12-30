@@ -50,6 +50,7 @@ pub fn run() {
             commands::files::delete_file,
             commands::files::get_mod_icon,
             commands::files::get_mod_metadata,
+            commands::files::run_installer,
             set_complete
         ])
         .setup(|app| {

@@ -233,3 +233,8 @@ pub async fn get_mod_metadata(path: String) -> Result<ModMetadata, String> {
 
     Ok(ModMetadata { id: None, name: None, version: None })
 }
+
+#[tauri::command]
+pub async fn run_installer(path: String) -> Result<(), String> {
+    open::that(path).map_err(|e| e.to_string())
+}

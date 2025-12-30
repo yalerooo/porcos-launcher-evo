@@ -56,6 +56,8 @@
             "core:window:allow-start-dragging",
             "core:webview:allow-create-webview",
             "core:webview:allow-create-webview-window",
+            "opener:default",
+            "opener:allow-open-path",
             "shell:allow-execute",
             "shell:allow-open",
             "dialog:default",
