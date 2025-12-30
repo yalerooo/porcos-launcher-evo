@@ -573,7 +573,14 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
 
                         setInstallStage(`Extrayendo archivos...`);
                         // extract_zip now handles .rar via unrar crate
-                        await invoke('extract_zip', { zipPath, targetDir: instancePath });
+                        const skipFiles = [
+                            "servers.dat"
+                        ];
+                        await invoke('extract_zip', { 
+                            zipPath, 
+                            targetDir: instancePath,
+                            skipFiles: skipFiles
+                        });
                     }
                     
 

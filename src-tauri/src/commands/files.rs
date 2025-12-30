@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use unrar::Archive;
 
 #[tauri::command]
-pub async fn extract_zip(zip_path: String, target_dir: String) -> Result<(), String> {
+pub async fn extract_zip(zip_path: String, target_dir: String, skip_files: Option<Vec<String>>) -> Result<(), String> {
+    let skip_list = skip_files.unwrap_or_default();
+
     // Handle RAR files
     if zip_path.to_lowercase().ends_with(".rar") {
         let mut archive = Archive::new(&zip_path)
@@ -18,6 +20,13 @@ pub async fn extract_zip(zip_path: String, target_dir: String) -> Result<(), Str
                     let filename = PathBuf::from(&entry.filename);
                     let dest_path = Path::new(&target_dir).join(&filename);
                     
+                    // Check if we should skip this file
+                    let file_name_str = filename.file_name().unwrap_or_default().to_string_lossy();
+                    if skip_list.iter().any(|s| s == &file_name_str) && dest_path.exists() {
+                        archive = header.skip().map_err(|e| format!("Failed to skip entry: {}", e))?;
+                        continue;
+                    }
+
                     if entry.is_directory() {
                         fs::create_dir_all(&dest_path).map_err(|e| format!("Failed to create dir {:?}: {}", dest_path, e))?;
                         archive = header.skip().map_err(|e| format!("Failed to skip dir: {}", e))?;
@@ -53,6 +62,12 @@ pub async fn extract_zip(zip_path: String, target_dir: String) -> Result<(), Str
             Some(path) => Path::new(&target_dir).join(path),
             None => continue,
         };
+
+        // Check if we should skip this file
+        let file_name_str = outpath.file_name().unwrap_or_default().to_string_lossy();
+        if skip_list.iter().any(|s| s == &file_name_str) && outpath.exists() {
+            continue;
+        }
 
         if (*file.name()).ends_with('/') {
             fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;

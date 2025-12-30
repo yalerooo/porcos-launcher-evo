@@ -298,10 +298,12 @@ const Home: React.FC = () => {
                     updates.forEach((u: any) => {
                         let urls = 0;
                         if (u.downloadUrl) urls++;
-                        if (u.downloadUrl2) urls++;
-                        if (u.downloadUrl3) urls++;
-                        if (u.downloadUrl4) urls++;
-                        if (u.downloadUrl5) urls++;
+                        
+                        let urlIndex = 2;
+                        while (u[`downloadUrl${urlIndex}`]) {
+                            urls++;
+                            urlIndex++;
+                        }
                         totalSteps += urls + 1; // +1 for extraction phase
                     });
                     
@@ -313,10 +315,12 @@ const Home: React.FC = () => {
                         // Download
                         const downloadUrls = [];
                         if (update.downloadUrl) downloadUrls.push(update.downloadUrl);
-                        if (update.downloadUrl2) downloadUrls.push(update.downloadUrl2);
-                        if (update.downloadUrl3) downloadUrls.push(update.downloadUrl3);
-                        if (update.downloadUrl4) downloadUrls.push(update.downloadUrl4);
-                        if (update.downloadUrl5) downloadUrls.push(update.downloadUrl5);
+                        
+                        let urlIndex = 2;
+                        while (update[`downloadUrl${urlIndex}`]) {
+                            downloadUrls.push(update[`downloadUrl${urlIndex}`]);
+                            urlIndex++;
+                        }
                         
                         const zipPaths = [];
                         setLaunchStage(`Descargando v${update.version} (${downloadUrls.length} partes)...`);
@@ -342,8 +346,15 @@ const Home: React.FC = () => {
                         
                         // Extract
                         setLaunchStage(`Instalando v${update.version}...`);
+                        const skipFiles = [
+                            "servers.dat"
+                        ];
                         for (const zipPath of zipPaths) {
-                            await invoke('extract_zip', { zipPath, targetDir: instancePath });
+                            await invoke('extract_zip', { 
+                                zipPath, 
+                                targetDir: instancePath,
+                                skipFiles: skipFiles
+                            });
                         }
                         currentStep++;
                         setLaunchProgress((currentStep / totalSteps) * 100);
@@ -841,12 +852,13 @@ const Home: React.FC = () => {
     }, []); // Run once on mount
 
     useEffect(() => {
-        let unlisten: (() => void) | undefined;
+        const unlisteners: (() => void)[] = [];
 
-        const setupListener = async () => {
+        const setupListeners = async () => {
             try {
                 const { listen } = await import('@tauri-apps/api/event');
-                unlisten = await listen('launch-progress', (event: any) => {
+                
+                const unlistenLaunch = await listen('launch-progress', (event: any) => {
                     const { stage, progress } = event.payload;
                     setLaunchStage(stage);
                     setLaunchProgress(progress);
@@ -856,15 +868,35 @@ const Home: React.FC = () => {
                         setTimeout(() => setIsLaunching(false), 2000);
                     }
                 });
+                unlisteners.push(unlistenLaunch);
+
+                const unlistenDownload = await listen('download-progress', (event: any) => {
+                    const { id, progress } = event.payload;
+                    if (id === 'java-download-8') {
+                        setLaunchProgress(progress);
+                        setLaunchStage(`Descargando Java 8 (${Math.round(progress)}%)...`);
+                    } else if (id === 'java-download-16') {
+                        setLaunchProgress(progress);
+                        setLaunchStage(`Descargando Java 16 (${Math.round(progress)}%)...`);
+                    } else if (id === 'java-download-17') {
+                        setLaunchProgress(progress);
+                        setLaunchStage(`Descargando Java 17 (${Math.round(progress)}%)...`);
+                    } else if (id === 'java-download-21') {
+                        setLaunchProgress(progress);
+                        setLaunchStage(`Descargando Java 21 (${Math.round(progress)}%)...`);
+                    }
+                });
+                unlisteners.push(unlistenDownload);
+
             } catch (error) {
-                console.error("Failed to setup event listener:", error);
+                console.error("Failed to setup event listeners:", error);
             }
         };
 
-        setupListener();
+        setupListeners();
 
         return () => {
-            if (unlisten) unlisten();
+            unlisteners.forEach(u => u());
         };
     }, []);
 
@@ -916,10 +948,12 @@ const Home: React.FC = () => {
                                 // Download
                                 const downloadUrls = [];
                                 if (update.downloadUrl) downloadUrls.push(update.downloadUrl);
-                                if (update.downloadUrl2) downloadUrls.push(update.downloadUrl2);
-                                if (update.downloadUrl3) downloadUrls.push(update.downloadUrl3);
-                                if (update.downloadUrl4) downloadUrls.push(update.downloadUrl4);
-                                if (update.downloadUrl5) downloadUrls.push(update.downloadUrl5);
+                                
+                                let urlIndex = 2;
+                                while (update[`downloadUrl${urlIndex}`]) {
+                                    downloadUrls.push(update[`downloadUrl${urlIndex}`]);
+                                    urlIndex++;
+                                }
                                 
                                 const zipPaths = [];
                                 for (let i = 0; i < downloadUrls.length; i++) {
@@ -931,8 +965,15 @@ const Home: React.FC = () => {
                                 }
                                 
                                 // Extract
+                                const skipFiles = [
+                                    "servers.dat"
+                                ];
                                 for (const zipPath of zipPaths) {
-                                    await invoke('extract_zip', { zipPath, targetDir: instancePath });
+                                    await invoke('extract_zip', { 
+                                        zipPath, 
+                                        targetDir: instancePath,
+                                        skipFiles: skipFiles
+                                    });
                                 }
                                 
                                 // Delete Files
@@ -991,10 +1032,90 @@ const Home: React.FC = () => {
 
         try {
             const { invoke } = await import("@tauri-apps/api/core");
+            const { join, appDataDir } = await import("@tauri-apps/api/path");
             
             // Get instance path
             const instancePath = await invoke("get_instance_path", { id: instance.id });
             addLog(`Instance path: ${instancePath}`);
+
+            // Determine Java version based on Minecraft version
+            const versionParts = versionToPlay.split('.');
+            let minor = 0;
+            let patch = 0;
+            if (versionParts.length >= 2) minor = parseInt(versionParts[1]);
+            if (versionParts.length >= 3) patch = parseInt(versionParts[2]);
+
+            const appData = await appDataDir();
+            const roamingDir = await join(appData, '..');
+            const porcosDir = await join(roamingDir, '.porcos');
+            const runtimeDir = await join(porcosDir, 'runtime');
+            
+            let javaDirName = '';
+            let javaUrl = '';
+            let javaZipName = '';
+            let javaId = '';
+            let javaLabel = '';
+
+            if (minor <= 16) {
+                // <= 1.16.5 -> JDK 8
+                javaDirName = 'jdk-8u461';
+                javaUrl = "https://github.com/yalerooo/myApis/releases/download/jdk/jdk-8u461-windows-x64.zip";
+                javaZipName = "java8.zip";
+                javaId = 'java-download-8';
+                javaLabel = 'Java 8';
+            } else if (minor === 17) {
+                // 1.17.x -> JDK 16
+                javaDirName = 'jdk-16.0.2';
+                javaUrl = "https://download.oracle.com/otn/java/jdk/16.0.2%2B7/d4a915d82b4c4fbb9bde534da945d746/jdk-16.0.2_windows-x64_bin.zip";
+                javaZipName = "java16.zip";
+                javaId = 'java-download-16';
+                javaLabel = 'Java 16';
+            } else if (minor >= 18 && minor <= 20) {
+                // 1.18 - 1.20.4 -> JDK 17
+                if (minor === 20 && patch >= 5) {
+                    // >= 1.20.5 -> JDK 21
+                    javaDirName = 'jdk-21.0.8';
+                    javaUrl = "https://download.oracle.com/java/21/archive/jdk-21.0.8_windows-x64_bin.zip";
+                    javaZipName = "java21.zip";
+                    javaId = 'java-download-21';
+                    javaLabel = 'Java 21';
+                } else {
+                    // 1.18 - 1.20.4 -> JDK 17
+                    javaDirName = 'jdk-17.0.12';
+                    javaUrl = "https://download.oracle.com/java/17/archive/jdk-17.0.12_windows-x64_bin.zip";
+                    javaZipName = "java17.zip";
+                    javaId = 'java-download-17';
+                    javaLabel = 'Java 17';
+                }
+            } else {
+                // >= 1.21 -> JDK 21
+                javaDirName = 'jdk-21.0.8';
+                javaUrl = "https://download.oracle.com/java/21/archive/jdk-21.0.8_windows-x64_bin.zip";
+                javaZipName = "java21.zip";
+                javaId = 'java-download-21';
+                javaLabel = 'Java 21';
+            }
+
+            const javaPath = await join(runtimeDir, javaDirName, 'bin', 'java.exe');
+
+            if (!await invoke('file_exists', { path: javaPath })) {
+                addLog(`${javaLabel} not found. Downloading...`);
+                setLaunchStage(`Descargando ${javaLabel}...`);
+                setLaunchProgress(0);
+                
+                const zipPath = await join(runtimeDir, javaZipName);
+                
+                await invoke('download_file', { 
+                    url: javaUrl, 
+                    path: zipPath, 
+                    id: javaId 
+                });
+                
+                setLaunchStage(`Descomprimiendo ${javaLabel}...`);
+                await invoke('extract_zip', { zipPath, targetDir: runtimeDir });
+                await invoke('delete_file', { path: zipPath });
+                addLog(`${javaLabel} installed successfully.`);
+            }
 
             // Generate offline UUID if needed
             let uuid = user.uuid;
@@ -1020,7 +1141,7 @@ const Home: React.FC = () => {
                 },
                 memory_min: `${memoryMin}G`,
                 memory_max: `${memoryMax}G`,
-                java_path: null,
+                java_path: javaPath,
                 minecraft_dir: instancePath
             };
 
