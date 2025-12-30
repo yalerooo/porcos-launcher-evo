@@ -152,7 +152,7 @@ pub async fn get_neoforge_versions(minecraft_version: String) -> Result<Vec<Load
 }
 
 #[derive(Deserialize)]
-struct ForgePromos {
+struct _ForgePromos {
     promos: HashMap<String, String>,
 }
 

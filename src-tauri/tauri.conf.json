@@ -58,7 +58,13 @@
             "shell:allow-execute",
             "shell:allow-open",
             "dialog:default",
-            "process:default"
+            "process:default",
+            "fs:default",
+            {
+              "identifier": "fs:allow-read-file",
+              "allow": ["$HOME/**", "$DESKTOP/**", "$DOWNLOADS/**", "$DOCUMENTS/**", "**"]
+            },
+            "fs:allow-exists"
           ]
         }
       ]

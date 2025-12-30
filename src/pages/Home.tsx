@@ -1162,21 +1162,28 @@ const Home: React.FC = () => {
                             
                             <div className={styles.instanceMeta}>
                                  {/* Version Pill */}
-                                 <div className={styles.metaPill} onClick={() => setIsMainVersionDropdownOpen(!isMainVersionDropdownOpen)}>
+                                 <div 
+                                    className={cn(
+                                        styles.metaPill, 
+                                        (activeInstance?.versions?.length || 0) <= 1 && "!cursor-default hover:!transform-none hover:!bg-[rgba(255,255,255,0.03)] hover:!border-[rgba(255,255,255,0.05)]"
+                                    )} 
+                                    onClick={() => (activeInstance?.versions?.length || 0) > 1 && setIsMainVersionDropdownOpen(!isMainVersionDropdownOpen)}
+                                 >
                                     <Gamepad2 size={16} className="text-[#ffbfba]" />
                                     <span className={styles.metaText}>{activeInstance?.selectedVersion || activeInstance?.version}</span>
-                                    <ChevronDown size={14} className="text-[#a1a1aa]" />
+                                    {(activeInstance?.versions?.length || 0) > 1 && <ChevronDown size={14} className="text-[#a1a1aa]" />}
                                     
                                     <AnimatePresence>
-                                        {isMainVersionDropdownOpen && (
+                                        {isMainVersionDropdownOpen && (activeInstance?.versions?.length || 0) > 1 && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setIsMainVersionDropdownOpen(false); }} />
                                                 <motion.div
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: 10 }}
+                                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                    transition={{ duration: 0.15, ease: "easeOut" }}
                                                     className={cn(
-                                                        "absolute bottom-full left-0 mb-2 w-64 bg-[#09090b] rounded-xl border border-white/10 shadow-2xl max-h-60 overflow-y-auto z-50",
+                                                        styles.versionDropdown,
                                                         styles.dropdownScrollbar
                                                     )}
                                                     onClick={(e) => e.stopPropagation()}
@@ -1189,8 +1196,8 @@ const Home: React.FC = () => {
                                                                 setIsMainVersionDropdownOpen(false);
                                                             }}
                                                             className={cn(
-                                                                "px-4 py-3 hover:bg-white/5 cursor-pointer text-white text-sm transition-colors flex items-center justify-between",
-                                                                (activeInstance?.selectedVersion || activeInstance?.version) === v ? "bg-white/10 text-[#ffbfba]" : ""
+                                                                styles.versionDropdownItem,
+                                                                (activeInstance?.selectedVersion || activeInstance?.version) === v ? styles.versionDropdownItemActive : ""
                                                             )}
                                                         >
                                                             <span>{v}</span>
@@ -1234,7 +1241,7 @@ const Home: React.FC = () => {
                                         initial={{ scale: 0.9, opacity: 0 }}
                                         animate={{ scale: 1, opacity: 1 }}
                                         onClick={handleUpdateInstance}
-                                        className="ml-4 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-full flex items-center gap-2 transition-all font-bold text-sm shadow-[0_0_15px_rgba(74,222,128,0.2)] hover:shadow-[0_0_20px_rgba(74,222,128,0.4)] cursor-pointer"
+                                        className={styles.updateButton}
                                      >
                                          <Download size={16} />
                                          Actualizar a v{updateAvailable.version}

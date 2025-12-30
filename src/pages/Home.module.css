@@ -113,18 +113,101 @@
     align-items: center;
     gap: 8px;
     color: #a1a1aa;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
-    transition: color 0.2s;
+    transition: all 0.2s ease;
     position: relative;
-    background: transparent;
-    border: none;
-    padding: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 6px 12px;
+    border-radius: 10px;
 }
 
 .metaPill:hover {
     color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.versionDropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 12px;
+    width: 280px;
+    background: rgba(18, 18, 21, 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 50;
+    padding: 6px;
+    transform-origin: bottom left;
+}
+
+.versionDropdownItem {
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    color: #a1a1aa;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.versionDropdownItem:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+
+.versionDropdownItemActive {
+    background: rgba(255, 191, 186, 0.1);
+    color: #ffbfba;
+}
+
+.versionDropdownItemActive:hover {
+    background: rgba(255, 191, 186, 0.15);
+}
+
+.updateButton {
+    margin-left: 0;
+    padding: 8px 16px;
+    background: rgba(74, 222, 128, 0.1);
+    color: #4ade80;
+    border: 1px solid rgba(74, 222, 128, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.05), 0 4px 12px rgba(74, 222, 128, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-family: 'Inter', sans-serif;
+}
+
+.updateButton:hover {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.1), 0 8px 20px rgba(74, 222, 128, 0.2);
+    transform: translateY(-1px);
+    color: #86efac;
+}
+
+.updateButton:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(74, 222, 128, 0.1);
 }
 
 .metaText {
@@ -140,12 +223,13 @@
     height: 100%;
     z-index: 2;
     flex-shrink: 0;
+    padding-left: 24px;
 }
 
 .playButtonStyled {
     height: 100%;
     padding: 0 48px;
-    background: #ffffff;
+    background: #ffbfba;
     color: #000000;
     border: none;
     display: flex;
@@ -159,7 +243,7 @@
 }
 
 .playButtonStyled:hover {
-    background: #ffbfba;
+    background: #ffffff;
 }
 
 .playButtonText {

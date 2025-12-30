@@ -11,6 +11,12 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "shell:allow-open",
-    "dialog:default"
+    "dialog:default",
+    "fs:default",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": ["$HOME/**", "$DESKTOP/**", "$DOWNLOADS/**", "$DOCUMENTS/**", "**"]
+    },
+    "fs:allow-exists"
   ]
 }

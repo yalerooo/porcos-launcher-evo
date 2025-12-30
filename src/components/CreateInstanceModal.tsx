@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, Upload, Box } from 'lucide-react';
+import { X, Loader2, Upload, Box, Type, Hash, Gamepad2, ChevronDown, Search } from 'lucide-react';
 import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { cn } from '@/lib/utils';
 import { open } from '@tauri-apps/plugin-dialog';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { readFile } from '@tauri-apps/plugin-fs';
 import styles from './CreateInstanceModal.module.css';
 
 const BACKGROUNDS = [
@@ -63,6 +63,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
     const [selectedPredefinedImage, setSelectedPredefinedImage] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+    const [versionSearch, setVersionSearch] = useState('');
 
     useEffect(() => {
         if (isOpen) {
@@ -75,6 +76,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
             setSelectedModLoader('Vanilla');
             setModLoaderVersion('');
             setAvailableModLoaderVersions([]);
+            setVersionSearch('');
             
             // Load versions if needed
             const loadVersions = async () => {
@@ -156,7 +158,16 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
             if (file) {
                 setSelectedImage(file as string);
                 setSelectedPredefinedImage(null);
-                setPreviewImage(convertFileSrc(file as string));
+                
+                // Read file and create blob URL
+                try {
+                    const contents = await readFile(file as string);
+                    const blob = new Blob([contents]);
+                    const url = URL.createObjectURL(blob);
+                    setPreviewImage(url);
+                } catch (readErr) {
+                    console.error("Failed to read image file:", readErr);
+                }
             }
         } catch (err) {
             console.error("Failed to select image:", err);
@@ -274,6 +285,10 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
         }
     };
 
+    const filteredVersions = versions.filter((v: any) => 
+        v.id.toLowerCase().includes(versionSearch.toLowerCase())
+    );
+
     return (
         <AnimatePresence>
             {isOpen && (
@@ -281,150 +296,118 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-12"
+                    className={styles.overlay}
                 >
                     <motion.div
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.9, opacity: 0 }}
-                        className="bg-[#1a1a1a] w-full max-w-md rounded-2xl border border-white/10 flex flex-col overflow-hidden shadow-2xl"
+                        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                        transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
+                        className={styles.modal}
                     >
-                        <div className={cn(styles.modalHeader, "border-b border-white/10 flex items-center justify-between bg-[#1a1a1a]")}>
-                            <h3 className="text-xl font-bold text-white">Nueva Instancia</h3>
+                        {/* Header */}
+                        <div className={styles.header}>
+                            <div>
+                                <h3 className={styles.title}>Nueva Instancia</h3>
+                                <p className={styles.subtitle}>Configura tu nueva aventura de Minecraft</p>
+                            </div>
                             <button 
                                 onClick={onClose}
-                                className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                                className={styles.closeButton}
                             >
                                 <X size={24} />
                             </button>
                         </div>
                         
-                        <div className={cn(styles.modalContent, "space-y-8")}>
-                            <div>
-                                <label className="block text-sm font-medium text-[#a1a1aa] mb-2">Nombre</label>
-                                <input
-                                    type="text"
-                                    value={newInstanceName}
-                                    onChange={(e) => setNewInstanceName(e.target.value)}
-                                    placeholder="Mi Mundo Survival"
-                                    className={cn("w-full bg-[#27272a] border border-transparent focus:border-[#ffbfba] rounded-lg h-14 text-white outline-none transition-all", styles.formInput)}
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-[#a1a1aa] mb-2">Versión</label>
-                                <div className="relative">
-                                    <div 
-                                        onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
-                                        className={cn(
-                                            "w-full bg-[#27272a] border border-transparent rounded-lg h-14 text-white flex items-center cursor-pointer transition-all hover:bg-[#3f3f46]", 
-                                            isVersionDropdownOpen ? "border-[#ffbfba] rounded-b-none" : "",
-                                            styles.formInput
-                                        )}
-                                    >
-                                        <span className="truncate">
-                                            {newInstanceVersion 
-                                                ? `${newInstanceVersion} ${versions.find((v: any) => v.id === newInstanceVersion)?.version_type ? `(${versions.find((v: any) => v.id === newInstanceVersion)?.version_type})` : ''}`
-                                                : 'Seleccionar versión'}
-                                        </span>
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#a1a1aa]">
-                                            <Box size={16} />
-                                        </div>
-                                    </div>
-
-                                    <AnimatePresence>
-                                        {isVersionDropdownOpen && (
-                                            <>
-                                                <div 
-                                                    className="fixed inset-0 z-40" 
-                                                    onClick={() => setIsVersionDropdownOpen(false)} 
-                                                />
-                                                <motion.div
-                                                    initial={{ opacity: 0, y: -10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -10 }}
-                                                    className={cn(
-                                                        "absolute top-full left-0 right-0 bg-[#27272a] rounded-b-lg border-x border-b border-white/10 shadow-xl max-h-60 overflow-y-auto z-50 -mt-[1px]",
-                                                        styles.dropdownScrollbar
-                                                    )}
-                                                >
-                                                    {versions.map((v: any) => (
-                                                        <div
-                                                            key={v.id}
-                                                            onClick={() => {
-                                                                setNewInstanceVersion(v.id);
-                                                                setIsVersionDropdownOpen(false);
-                                                            }}
-                                                            className={cn(
-                                                                "px-4 py-3 hover:bg-white/5 cursor-pointer text-white transition-colors flex items-center justify-between",
-                                                                newInstanceVersion === v.id ? "bg-white/10 text-[#ffbfba]" : ""
-                                                            )}
-                                                        >
-                                                            <span>{v.id}</span>
-                                                            {v.version_type && (
-                                                                <span className="text-xs text-white/40 uppercase border border-white/10 px-2 py-0.5 rounded">
-                                                                    {v.version_type}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </motion.div>
-                                            </>
-                                        )}
-                                    </AnimatePresence>
+                        <div className={styles.content}>
+                            {/* Name Input */}
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>
+                                    <Type size={16} />
+                                    Nombre de la Instancia
+                                </label>
+                                <div className={styles.inputWrapper}>
+                                    <input
+                                        type="text"
+                                        value={newInstanceName}
+                                        onChange={(e) => setNewInstanceName(e.target.value)}
+                                        placeholder="Ej: Mi Mundo Survival 1.21"
+                                        className={styles.input}
+                                        autoFocus
+                                    />
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-[#a1a1aa] mb-2">Mod Loader</label>
-                                    <div className="relative">
+                            {/* Version & Loader Grid */}
+                            <div className={styles.grid}>
+                                {/* Version Selector */}
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>
+                                        <Hash size={16} />
+                                        Versión de Minecraft
+                                    </label>
+                                    <div className={styles.inputWrapper}>
                                         <div 
-                                            onClick={() => setIsModLoaderDropdownOpen(!isModLoaderDropdownOpen)}
+                                            onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
                                             className={cn(
-                                                "w-full bg-[#27272a] border border-transparent rounded-lg h-14 text-white flex items-center cursor-pointer transition-all hover:bg-[#3f3f46]", 
-                                                isModLoaderDropdownOpen ? "border-[#ffbfba] rounded-b-none" : "",
-                                                styles.formInput
+                                                styles.dropdownTrigger, 
+                                                isVersionDropdownOpen ? styles.dropdownTriggerActive : ""
                                             )}
                                         >
-                                            <span className="truncate px-4">{selectedModLoader}</span>
-                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#a1a1aa]">
-                                                <Box size={16} />
-                                            </div>
+                                            <span className="truncate font-medium">
+                                                {newInstanceVersion || 'Seleccionar versión'}
+                                            </span>
+                                            <ChevronDown size={20} className={cn(styles.chevron, isVersionDropdownOpen ? styles.chevronRotated : "")} />
                                         </div>
 
                                         <AnimatePresence>
-                                            {isModLoaderDropdownOpen && (
+                                            {isVersionDropdownOpen && (
                                                 <>
-                                                    <div 
-                                                        className="fixed inset-0 z-40" 
-                                                        onClick={() => setIsModLoaderDropdownOpen(false)} 
-                                                    />
+                                                    <div className={styles.backdrop} onClick={() => setIsVersionDropdownOpen(false)} />
                                                     <motion.div
-                                                        initial={{ opacity: 0, y: -10 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        exit={{ opacity: 0, y: -10 }}
-                                                        className={cn(
-                                                            "absolute top-full left-0 right-0 bg-[#27272a] rounded-b-lg border-x border-b border-white/10 shadow-xl z-50 -mt-[1px]",
-                                                            styles.dropdownScrollbar
-                                                        )}
+                                                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                                                        className={styles.dropdownMenu}
                                                     >
-                                                        {['Vanilla', 'Forge', 'Fabric', 'Quilt', 'NeoForge'].map((loader) => (
-                                                            <div
-                                                                key={loader}
-                                                                onClick={() => {
-                                                                    setSelectedModLoader(loader);
-                                                                    setIsModLoaderDropdownOpen(false);
-                                                                }}
-                                                                className={cn(
-                                                                    "px-4 py-3 hover:bg-white/5 cursor-pointer text-white transition-colors flex items-center justify-between",
-                                                                    selectedModLoader === loader ? "bg-white/10 text-[#ffbfba]" : ""
-                                                                )}
-                                                            >
-                                                                <span>{loader}</span>
+                                                        <div className={styles.dropdownSearchHeader}>
+                                                            <div className={styles.searchWrapper}>
+                                                                <Search size={16} className={styles.searchIcon} />
+                                                                <input 
+                                                                    type="text" 
+                                                                    placeholder="Buscar versión..." 
+                                                                    className={styles.searchInput}
+                                                                    value={versionSearch}
+                                                                    onChange={(e) => setVersionSearch(e.target.value)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                />
                                                             </div>
-                                                        ))}
+                                                        </div>
+                                                        <div className={styles.dropdownList}>
+                                                            {filteredVersions.map((v: any) => (
+                                                                <div
+                                                                    key={v.id}
+                                                                    onClick={() => {
+                                                                        setNewInstanceVersion(v.id);
+                                                                        setIsVersionDropdownOpen(false);
+                                                                    }}
+                                                                    className={cn(
+                                                                        styles.dropdownItem,
+                                                                        newInstanceVersion === v.id ? styles.dropdownItemActive : ""
+                                                                    )}
+                                                                >
+                                                                    <span className="font-medium">{v.id}</span>
+                                                                    {v.version_type && (
+                                                                        <span className={cn(
+                                                                            styles.versionTag,
+                                                                            v.version_type === 'release' ? styles.versionTagRelease : styles.versionTagSnapshot
+                                                                        )}>
+                                                                            {v.version_type}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </motion.div>
                                                 </>
                                             )}
@@ -432,92 +415,154 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                     </div>
                                 </div>
 
+                                {/* Mod Loader Selector */}
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>
+                                        <Box size={16} />
+                                        Mod Loader
+                                    </label>
+                                    <div className={styles.inputWrapper}>
+                                        <div 
+                                            onClick={() => setIsModLoaderDropdownOpen(!isModLoaderDropdownOpen)}
+                                            className={cn(
+                                                styles.dropdownTrigger, 
+                                                isModLoaderDropdownOpen ? styles.dropdownTriggerActive : ""
+                                            )}
+                                        >
+                                            <span className="truncate font-medium">{selectedModLoader}</span>
+                                            <ChevronDown size={20} className={cn(styles.chevron, isModLoaderDropdownOpen ? styles.chevronRotated : "")} />
+                                        </div>
+
+                                        <AnimatePresence>
+                                            {isModLoaderDropdownOpen && (
+                                                <>
+                                                    <div className={styles.backdrop} onClick={() => setIsModLoaderDropdownOpen(false)} />
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                                                        className={styles.dropdownMenu}
+                                                    >
+                                                        <div className={styles.dropdownList}>
+                                                            {['Vanilla', 'Forge', 'Fabric', 'Quilt', 'NeoForge'].map((loader) => (
+                                                                <div
+                                                                    key={loader}
+                                                                    onClick={() => {
+                                                                        setSelectedModLoader(loader);
+                                                                        setIsModLoaderDropdownOpen(false);
+                                                                    }}
+                                                                    className={cn(
+                                                                        styles.dropdownItem,
+                                                                        selectedModLoader === loader ? styles.dropdownItemActive : ""
+                                                                    )}
+                                                                >
+                                                                    <span className="font-medium">{loader}</span>
+                                                                    {selectedModLoader === loader && <div className="w-1.5 h-1.5 rounded-full bg-[#ffbfba]" />}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </motion.div>
+                                                </>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Loader Version (Conditional) */}
+                            <AnimatePresence>
                                 {selectedModLoader !== 'Vanilla' && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-[#a1a1aa] mb-2">Loader Version</label>
-                                        <div className="relative">
+                                    <motion.div 
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        className={styles.formGroup}
+                                    >
+                                        <label className={styles.label}>
+                                            <Gamepad2 size={16} />
+                                            Versión del Loader
+                                        </label>
+                                        <div className={styles.inputWrapper}>
                                             <div 
                                                 onClick={() => setIsModLoaderVersionDropdownOpen(!isModLoaderVersionDropdownOpen)}
                                                 className={cn(
-                                                    "w-full bg-[#27272a] border border-transparent rounded-lg h-14 text-white flex items-center cursor-pointer transition-all hover:bg-[#3f3f46]", 
-                                                    isModLoaderVersionDropdownOpen ? "border-[#ffbfba] rounded-b-none" : "",
-                                                    styles.formInput
+                                                    styles.dropdownTrigger, 
+                                                    isModLoaderVersionDropdownOpen ? styles.dropdownTriggerActive : ""
                                                 )}
                                             >
-                                                <span className="truncate px-4">
+                                                <span className="truncate font-medium">
                                                     {modLoaderVersion || 'Select Version'}
                                                 </span>
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#a1a1aa]">
-                                                    <Box size={16} />
-                                                </div>
+                                                <ChevronDown size={20} className={cn(styles.chevron, isModLoaderVersionDropdownOpen ? styles.chevronRotated : "")} />
                                             </div>
 
                                             <AnimatePresence>
                                                 {isModLoaderVersionDropdownOpen && (
                                                     <>
-                                                        <div 
-                                                            className="fixed inset-0 z-40" 
-                                                            onClick={() => setIsModLoaderVersionDropdownOpen(false)} 
-                                                        />
+                                                        <div className={styles.backdrop} onClick={() => setIsModLoaderVersionDropdownOpen(false)} />
                                                         <motion.div
-                                                            initial={{ opacity: 0, y: -10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -10 }}
-                                                            className={cn(
-                                                                "absolute top-full left-0 right-0 bg-[#27272a] rounded-b-lg border-x border-b border-white/10 shadow-xl max-h-60 overflow-y-auto z-50 -mt-[1px]",
-                                                                styles.dropdownScrollbar
-                                                            )}
+                                                            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                                                            className={styles.dropdownMenu}
                                                         >
-                                                            {availableModLoaderVersions.map((v: any) => (
-                                                                <div
-                                                                    key={v.version}
-                                                                    onClick={() => {
-                                                                        setModLoaderVersion(v.version);
-                                                                        setIsModLoaderVersionDropdownOpen(false);
-                                                                    }}
-                                                                    className={cn(
-                                                                        "px-4 py-3 hover:bg-white/5 cursor-pointer text-white transition-colors flex items-center justify-between",
-                                                                        modLoaderVersion === v.version ? "bg-white/10 text-[#ffbfba]" : ""
-                                                                    )}
-                                                                >
-                                                                    <span>{v.version}</span>
-                                                                    {v.stable && (
-                                                                        <span className="text-xs text-green-400 border border-green-400/30 px-2 py-0.5 rounded">
-                                                                            Stable
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            ))}
-                                                            {availableModLoaderVersions.length === 0 && (
-                                                                <div className="px-4 py-3 text-white/50 text-sm">
-                                                                    No versions found
-                                                                </div>
-                                                            )}
+                                                            <div className={styles.dropdownList}>
+                                                                {availableModLoaderVersions.map((v: any) => (
+                                                                    <div
+                                                                        key={v.version}
+                                                                        onClick={() => {
+                                                                            setModLoaderVersion(v.version);
+                                                                            setIsModLoaderVersionDropdownOpen(false);
+                                                                        }}
+                                                                        className={cn(
+                                                                            styles.dropdownItem,
+                                                                            modLoaderVersion === v.version ? styles.dropdownItemActive : ""
+                                                                        )}
+                                                                    >
+                                                                        <span className="font-medium">{v.version}</span>
+                                                                        {v.stable && (
+                                                                            <span className={styles.versionTagRelease}>
+                                                                                Stable
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                                {availableModLoaderVersions.length === 0 && (
+                                                                    <div className="px-4 py-8 text-center text-white/30 text-sm">
+                                                                        No se encontraron versiones compatibles
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </motion.div>
                                                     </>
                                                 )}
                                             </AnimatePresence>
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 )}
-                            </div>
+                            </AnimatePresence>
 
-                            <div>
-                                <label className="block text-sm font-medium text-[#a1a1aa] mb-2">Icono de la Instancia</label>
-                                <div className="grid grid-cols-5 gap-4 max-h-64 overflow-y-auto p-6 bg-[#121212] rounded-xl border border-white/5 scrollbar-thin scrollbar-thumb-white/10">
+                            {/* Icon Selection */}
+                            <div className={styles.formGroup}>
+                                <label className={styles.label}>
+                                    <Upload size={16} />
+                                    Icono de la Instancia
+                                </label>
+                                <div className={styles.iconGrid}>
                                     {/* Upload Option */}
                                     <div 
                                         onClick={handleSelectImage}
                                         className={cn(
-                                            "aspect-square rounded-lg cursor-pointer border-2 border-dashed border-white/10 transition-all p-1 flex items-center justify-center hover:bg-white/5 hover:border-[#ffbfba] group",
-                                            selectedImage ? "border-[#ffbfba] bg-[#ffbfba]/20" : ""
+                                            styles.iconItem,
+                                            styles.uploadItem,
+                                            selectedImage ? styles.iconItemSelected : ""
                                         )}
                                         title="Subir imagen personalizada"
                                     >
                                         {selectedImage ? (
-                                            <img src={previewImage!} className="w-full h-full object-cover rounded-md" />
+                                            <img src={previewImage!} className={styles.uploadImage} />
                                         ) : (
-                                            <Upload className="text-white/20 group-hover:text-[#ffbfba] transition-colors w-6 h-6" />
+                                            <Upload className={styles.uploadIcon} />
                                         )}
                                     </div>
 
@@ -526,29 +571,36 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                             key={icon} 
                                             onClick={() => handleSelectPredefined(icon)}
                                             className={cn(
-                                                "aspect-square rounded-lg cursor-pointer border-2 transition-all p-1 flex items-center justify-center hover:bg-white/5",
-                                                selectedPredefinedImage === icon ? "border-[#ffbfba] bg-[#ffbfba]/20" : "border-transparent"
+                                                styles.iconItem,
+                                                selectedPredefinedImage === icon ? styles.iconItemSelected : ""
                                             )}
                                         >
-                                            <img src={`/assets/versions/${icon}`} className="w-full h-full object-contain" loading="lazy" />
+                                            <img src={`/assets/versions/${icon}`} className={styles.iconImage} loading="lazy" />
+                                            {selectedPredefinedImage === icon && (
+                                                <motion.div 
+                                                    layoutId="icon-selected"
+                                                    className="absolute inset-0 border-2 border-[#ffbfba] rounded-xl"
+                                                />
+                                            )}
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className={cn("flex gap-4", styles.modalFooter)}>
+                            {/* Footer */}
+                            <div className={styles.footer}>
                                 <button
                                     onClick={onClose}
-                                    className="flex-1 h-14 rounded-lg bg-[#27272a] text-white hover:bg-[#3f3f46] transition-colors font-medium"
+                                    className={styles.cancelButton}
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={handleCreateInstance}
                                     disabled={!newInstanceName || !newInstanceVersion || isCreating}
-                                    className="flex-1 h-14 bg-[#ffbfba] text-[#1a1a1a] rounded-lg font-bold hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    className={styles.createButton}
                                 >
-                                    {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : "Crear"}
+                                    {isCreating ? <Loader2 className={styles.loader} /> : "Crear Instancia"}
                                 </button>
                             </div>
                         </div>

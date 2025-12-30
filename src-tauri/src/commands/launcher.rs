@@ -22,7 +22,7 @@ pub async fn launch_minecraft(window: tauri::Window, options: serde_json::Value)
         println!("[Command] Keys present: {:?}", obj.keys().collect::<Vec<_>>());
     }
 
-    let mut options: LaunchOptions = serde_json::from_value(options.clone())
+    let options: LaunchOptions = serde_json::from_value(options.clone())
         .map_err(|e| format!("Failed to parse options: {}", e))?;
 
     println!("[Command] Parsed Options: {:?}", options);
