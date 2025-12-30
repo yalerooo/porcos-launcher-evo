@@ -1431,7 +1431,7 @@ const Mods: React.FC = () => {
 
                     {/* Pagination Bar - Always visible if items exist */}
                     {!isLoading && items.length > 0 && searchType !== 'updates' && (
-                        <div className={cn(styles.paginationBar, (activeSource === 'porcos' || searchType === 'updates') && styles.fullWidth)}>
+                        <div className={cn(styles.paginationBar, activeSource === 'porcos' && styles.fullWidth)}>
                             <button
                                 onClick={() => setPage(p => Math.max(0, p - 1))}
                                 disabled={page === 0}

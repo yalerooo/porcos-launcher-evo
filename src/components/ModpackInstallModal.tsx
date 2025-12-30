@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Download, Loader2, AlertCircle, Check, Package, ChevronDown } from 'lucide-react';
+import { X, Download, Loader2, AlertCircle, Package, ChevronDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { join, appCacheDir, homeDir } from '@tauri-apps/api/path';
 import { useLauncherStore } from '@/stores/launcherStore';
 import styles from './ModpackInstallModal.module.css';
-import { cn } from '@/lib/utils';
 
 // Force re-render
 const TIMESTAMP = Date.now();

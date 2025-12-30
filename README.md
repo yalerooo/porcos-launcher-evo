@@ -52,6 +52,11 @@ npm run tauri build
 
 El ejecutable se generará en `src-tauri/target/release/`.
 
+Update version
+
+```bash
+node update_version.cjs 0.1.1
+```
 ## Tecnologías
 
 *   [Tauri](https://tauri.app/) - Framework para aplicaciones de escritorio

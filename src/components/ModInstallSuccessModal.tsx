@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, PackageCheck, FileCode, Box } from 'lucide-react';
+import { Layers, PackageCheck, Box } from 'lucide-react';
 import { motion } from 'framer-motion';
 import styles from './ModInstallSuccessModal.module.css';
 
