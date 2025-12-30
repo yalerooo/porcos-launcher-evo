@@ -75,7 +75,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                 const data = JSON.parse(responseText);
                 
                 // Filter and map
-                const mappedVersions = data.map((v: any) => ({
+                let mappedVersions = data.map((v: any) => ({
                     id: v.id,
                     name: v.version_number,
                     type: v.version_type,
@@ -84,6 +84,13 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                     date: new Date(v.date_published).toLocaleDateString(),
                     original: v
                 }));
+
+                if (gameVersion) {
+                    mappedVersions = mappedVersions.filter((v: any) => v.gameVersions.includes(gameVersion));
+                }
+                if (loader) {
+                     mappedVersions = mappedVersions.filter((v: any) => v.loaders.includes(loader.toLowerCase()));
+                }
 
                 setVersions(mappedVersions);
 
@@ -111,7 +118,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                 }) as string;
                 const data = JSON.parse(responseText);
                 
-                const mappedVersions = data.data.map((f: any) => ({
+                let mappedVersions = data.data.map((f: any) => ({
                     id: f.id,
                     name: f.displayName,
                     type: f.releaseType === 1 ? 'release' : f.releaseType === 2 ? 'beta' : 'alpha',
@@ -120,6 +127,16 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                     date: new Date(f.fileDate).toLocaleDateString(),
                     original: f
                 }));
+
+                if (gameVersion) {
+                    mappedVersions = mappedVersions.filter((v: any) => v.gameVersions.includes(gameVersion));
+                }
+                if (loader) {
+                    const loaderName = loader.toLowerCase();
+                    mappedVersions = mappedVersions.filter((v: any) => 
+                        v.gameVersions.some((gv: string) => gv.toLowerCase() === loaderName)
+                    );
+                }
 
                 setVersions(mappedVersions);
 
@@ -248,88 +265,88 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                                 ))}
                             </div>
                         )}
-                        
-                        <div className={styles.actions}>
-                            {/* Version Selector */}
-                            {(type === 'mods' || type === 'modpacks') && versions.length > 0 && (
-                                <div className="relative" ref={dropdownRef}>
-                                    <button 
-                                        className={styles.versionSelector}
-                                        onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
-                                        disabled={loadingVersions}
-                                    >
-                                        <span className="truncate max-w-[150px]">
-                                            {loadingVersions ? "Cargando..." : selectedVersion ? selectedVersion.name : "Seleccionar versión"}
-                                        </span>
-                                        <ChevronDown size={16} />
-                                    </button>
+                    </div>
+                    
+                    <div className={styles.actions}>
+                        {/* Version Selector */}
+                        {(type === 'mods' || type === 'modpacks') && versions.length > 0 && (
+                            <div className="relative" ref={dropdownRef}>
+                                <button 
+                                    className={styles.versionSelector}
+                                    onClick={() => setIsVersionDropdownOpen(!isVersionDropdownOpen)}
+                                    disabled={loadingVersions}
+                                >
+                                    <span className="truncate max-w-[150px]">
+                                        {loadingVersions ? "Cargando..." : selectedVersion ? selectedVersion.name : "Seleccionar versión"}
+                                    </span>
+                                    <ChevronDown size={16} />
+                                </button>
 
-                                    {isVersionDropdownOpen && (
-                                        <div className={styles.versionDropdown}>
-                                            {versions.map((v) => (
-                                                <button
-                                                    key={v.id}
-                                                    className={cn(
-                                                        styles.versionOption,
-                                                        selectedVersion?.id === v.id && styles.versionOptionActive
-                                                    )}
-                                                    onClick={() => {
-                                                        setSelectedVersion(v);
-                                                        setIsVersionDropdownOpen(false);
-                                                    }}
-                                                >
-                                                    <div className="flex flex-col items-start">
-                                                        <span className="font-medium truncate w-full">{v.name}</span>
-                                                        <span className="text-xs opacity-60">
-                                                            {v.gameVersions.join(', ')} • {v.date}
-                                                        </span>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <button 
-                                onClick={() => onInstall(item, selectedVersion)}
-                                disabled={isInstalling || (isInstalled && !hasUpdate && type === 'mods' && !selectedVersion)}
-                                className={cn(
-                                    styles.installButton,
-                                    isInstalled && !hasUpdate && type === 'mods' && !selectedVersion && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
-                                    isInstalled && hasUpdate && type === 'mods' && "bg-[#ffbfba]/20 text-[#ffbfba] hover:bg-[#ffbfba]/30 border-[#ffbfba]/30"
+                                {isVersionDropdownOpen && (
+                                    <div className={styles.versionDropdown}>
+                                        {versions.map((v) => (
+                                            <button
+                                                key={v.id}
+                                                className={cn(
+                                                    styles.versionOption,
+                                                    selectedVersion?.id === v.id && styles.versionOptionActive
+                                                )}
+                                                onClick={() => {
+                                                    setSelectedVersion(v);
+                                                    setIsVersionDropdownOpen(false);
+                                                }}
+                                            >
+                                                <div className="flex flex-col items-start">
+                                                    <span className="font-medium truncate w-full">{v.name}</span>
+                                                    <span className="text-xs opacity-60">
+                                                        {v.gameVersions.join(', ')} • {v.date}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
-                            >
-                                {isInstalling ? (
-                                    <>
-                                        <Loader2 size={20} className="animate-spin" />
-                                        Instalando...
-                                    </>
-                                ) : type === 'modpacks' ? (
-                                    <>
-                                        <Plus size={20} />
-                                        Crear Instancia
-                                    </>
-                                ) : isInstalled && !selectedVersion ? (
-                                    hasUpdate ? (
-                                        <>
-                                            <Download size={20} />
-                                            Actualizar
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Check size={20} />
-                                            Instalado
-                                        </>
-                                    )
-                                ) : (
+                            </div>
+                        )}
+
+                        <button 
+                            onClick={() => onInstall(item, selectedVersion)}
+                            disabled={isInstalling || (isInstalled && !hasUpdate && type === 'mods' && !selectedVersion)}
+                            className={cn(
+                                styles.installButton,
+                                isInstalled && !hasUpdate && type === 'mods' && !selectedVersion && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
+                                isInstalled && hasUpdate && type === 'mods' && "bg-[#ffbfba]/20 text-[#ffbfba] hover:bg-[#ffbfba]/30 border-[#ffbfba]/30"
+                            )}
+                        >
+                            {isInstalling ? (
+                                <>
+                                    <Loader2 size={20} className="animate-spin" />
+                                    Instalando...
+                                </>
+                            ) : type === 'modpacks' ? (
+                                <>
+                                    <Plus size={20} />
+                                    Crear Instancia
+                                </>
+                            ) : isInstalled && !selectedVersion ? (
+                                hasUpdate ? (
                                     <>
                                         <Download size={20} />
-                                        {selectedVersion ? "Instalar Versión" : "Instalar"}
+                                        Actualizar
                                     </>
-                                )}
-                            </button>
-                        </div>
+                                ) : (
+                                    <>
+                                        <Check size={20} />
+                                        Instalado
+                                    </>
+                                )
+                            ) : (
+                                <>
+                                    <Download size={20} />
+                                    {selectedVersion ? "Instalar Versión" : "Instalar"}
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
 
@@ -357,7 +374,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                             )}
 
                             {/* Description */}
-                            <div className="mt-8 prose prose-invert max-w-none prose-img:rounded-lg prose-a:text-[#ffbfba] prose-headings:text-white prose-strong:text-white">
+                            <div className="mt-8 prose prose-invert max-w-none prose-img:rounded-lg prose-img:mx-auto prose-img:block prose-a:text-[#ffbfba] prose-headings:text-white prose-strong:text-white">
                                 {item.source === 'curseforge' ? (
                                     <div dangerouslySetInnerHTML={{ __html: description }} />
                                 ) : (
@@ -365,7 +382,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                                         remarkPlugins={[remarkGfm]} 
                                         rehypePlugins={[rehypeRaw]}
                                         components={{
-                                            img: ({node, ...props}) => <img {...props} className="max-w-full h-auto rounded-lg" />,
+                                            img: ({node, ...props}) => <img {...props} className="max-w-full h-auto rounded-lg mx-auto block" />,
                                             a: ({node, ...props}) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-[#ffbfba] hover:underline" />
                                         }}
                                     >

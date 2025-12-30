@@ -401,57 +401,27 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
 
     return (
         <div className={styles.container}>
+            {/* Hero Background */}
+            <div className={styles.heroBackground}>
+                <img src={imageSrc} className={styles.heroImage} alt="" />
+                <div className={styles.heroOverlay} />
+            </div>
+
             {/* Header */}
             <div className={styles.header}>
-                <button 
-                    onClick={onBack}
-                    className={styles.backButton}
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Instances
-                </button>
-
-                <div className="flex items-start justify-between mb-10">
-                    <div className="flex items-center gap-8">
-                        {/* Icon */}
-                        <div className="w-32 h-32 rounded-3xl bg-[#27272a] border border-white/10 flex items-center justify-center overflow-hidden shadow-2xl">
-                            <img 
-                                src={imageSrc} 
-                                className="w-full h-full object-cover"
-                                alt={instance.name}
-                            />
-                        </div>
-
-                        {/* Info */}
-                        <div className="pt-2">
-                            <h1 className="text-4xl font-bold mb-4 tracking-tight">{instance.name}</h1>
-                            <div className="flex gap-3">
-                                <span className="px-3 py-1 rounded-md bg-[#ffbfba]/10 text-[#ffbfba] text-sm font-medium border border-[#ffbfba]/20">
-                                    {instance.modLoader ? instance.modLoader : 'Vanilla'}
-                                </span>
-                                <span className="px-3 py-1 rounded-md bg-[#27272a] text-zinc-400 text-sm font-medium border border-white/5">
-                                    {instance.version.replace(/[^0-9.]/g, '')}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
+                <div className={styles.topBar}>
+                    <button onClick={onBack} className={styles.iconButton} title="Back to Library">
+                        <ArrowLeft size={20} />
+                    </button>
+                    
                     {/* Actions */}
-                    <div className={styles.actionGroup}>
-                        <button
-                            onClick={(e) => onPlay(e, instance)}
-                            disabled={isLaunching}
-                            className={styles.playButton}
-                        >
-                            <Play className="w-5 h-5 fill-current" />
-                            Play
+                    <div className={styles.actions}>
+                        <button onClick={handleOpenFolder} className={styles.iconButton} title="Open Folder">
+                            <Folder size={20} />
                         </button>
                         <div className={styles.menuContainer} ref={menuRef}>
-                            <button 
-                                className={styles.iconButton}
-                                onClick={() => setShowMenu(!showMenu)}
-                            >
-                                <MoreHorizontal className="w-6 h-6" />
+                            <button className={styles.iconButton} onClick={() => setShowMenu(!showMenu)}>
+                                <MoreHorizontal size={20} />
                             </button>
                             
                             {showMenu && (
@@ -480,36 +450,58 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                 </div>
                             )}
                         </div>
-                        <button 
-                            onClick={handleOpenFolder}
-                            className={styles.iconButton}
-                        >
-                            <Folder className="w-6 h-6" />
-                        </button>
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex gap-8 border-b border-white/5 justify-center">
-                    {tabs.map(tab => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={cn(
-                                "pb-4 text-sm font-medium transition-colors relative px-2",
-                                activeTab === tab ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+                <div className={styles.instanceInfo}>
+                    <div className={styles.instanceIconWrapper}>
+                        <img src={imageSrc} className={styles.instanceIcon} alt={instance.name} />
+                    </div>
+                    <div className={styles.instanceMeta}>
+                        <h1 className={styles.instanceTitle}>{instance.name}</h1>
+                        <div className={styles.tags}>
+                            <span className={cn(styles.tag, styles.tagPrimary)}>
+                                {instance.modLoader || 'Vanilla'} {instance.modLoaderVersion}
+                            </span>
+                            {instance.versions && instance.versions.length > 1 ? (
+                                instance.versions.map(v => (
+                                    <span key={v} className={cn(styles.tag, styles.tagSecondary)}>
+                                        {v.split('(')[0].trim()}
+                                    </span>
+                                ))
+                            ) : (
+                                <span className={cn(styles.tag, styles.tagSecondary)}>
+                                    {instance.version.split('(')[0].trim()}
+                                </span>
                             )}
-                        >
-                            {tab}
-                            {activeTab === tab && (
-                                <motion.div 
-                                    layoutId="activeTab"
-                                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ffbfba] shadow-[0_0_10px_rgba(255,191,186,0.5)]"
-                                />
-                            )}
-                        </button>
-                    ))}
+                            <span className={cn(styles.tag, styles.tagSecondary)}>
+                                {files.length} Files
+                            </span>
+                        </div>
+                    </div>
+                    <button 
+                        className={styles.playButton}
+                        onClick={(e) => onPlay(e, instance)}
+                        disabled={isLaunching}
+                    >
+                        <Play size={20} fill="currentColor" />
+                        {isLaunching ? 'Launching...' : 'Play Now'}
+                    </button>
                 </div>
+            </div>
+
+            {/* Tabs */}
+            <div className={styles.tabsContainer}>
+                {tabs.map(tab => (
+                    <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={cn(styles.tabButton, activeTab === tab && styles.tabButtonActive)}
+                    >
+                        {tab}
+                        {activeTab === tab && <motion.div layoutId="activeTab" className={styles.tabIndicator} />}
+                    </button>
+                ))}
             </div>
 
             {/* Content Area */}
@@ -527,9 +519,6 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                     className={styles.searchInput}
                                 />
-                                <button className={styles.searchButton}>
-                                    Buscar
-                                </button>
                             </div>
                         </div>
 

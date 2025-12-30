@@ -229,7 +229,7 @@ export default function MainLayout({
                 key={item.id}
                 onClick={() => setActivePage(item.id)}
                 className={cn(
-                  "flex items-center w-full h-14 px-0 rounded-2xl transition-all duration-300 ease-in-out relative overflow-hidden whitespace-nowrap group/btn justify-start pl-0",
+                  "flex items-center w-full h-14 px-0 rounded-2xl transition-all duration-300 ease-in-out relative overflow-hidden whitespace-nowrap group/btn justify-start pl-0 cursor-pointer",
                   isActive
                     ? "bg-[#ffbfba] text-[#1a1a1a] shadow-[0_0_20px_rgba(255,191,186,0.3)]"
                     : "text-[var(--text-secondary)] hover:text-white hover:bg-white/5"
@@ -254,7 +254,7 @@ export default function MainLayout({
         {/* Logout */}
         <div className="mt-auto pb-6 w-full px-0 group-hover/sidebar:px-3 transition-all duration-300">
              <button 
-                className="flex items-center w-full h-14 px-0 rounded-2xl text-gray-500 hover:text-white transition-colors hover:bg-white/5 whitespace-nowrap group/btn justify-start pl-0 transition-all duration-300 ease-in-out" 
+                className="flex items-center w-full h-14 px-0 rounded-2xl text-gray-500 hover:text-white transition-colors hover:bg-white/5 whitespace-nowrap group/btn justify-start pl-0 transition-all duration-300 ease-in-out cursor-pointer" 
                 onClick={onLogout}
              >
                 <div className="min-w-[65px] flex items-center justify-center">

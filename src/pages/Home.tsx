@@ -1375,7 +1375,7 @@ const Home: React.FC = () => {
                                                     Apariencia
                                                 </div>
                                                 <p className={styles.cardDescription}>
-                                                    Elige un fondo épico para tu instancia.
+                                                    Elige un fondo para tu instancia.
                                                 </p>
                                                 
                                                 <div className={styles.inputGroup}>
