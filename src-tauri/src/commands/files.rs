@@ -253,3 +253,66 @@ pub async fn get_mod_metadata(path: String) -> Result<ModMetadata, String> {
 pub async fn run_installer(path: String) -> Result<(), String> {
     open::that(path).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn move_file(source: String, target: String) -> Result<(), String> {
+    fs::rename(source, target).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn rename_file(path: String, new_name: String) -> Result<(), String> {
+    let path_buf = PathBuf::from(&path);
+    let parent = path_buf.parent().ok_or("Invalid path")?;
+    let new_path = parent.join(new_name);
+    fs::rename(path, new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn remove_dir(path: String) -> Result<(), String> {
+    fs::remove_dir_all(path).map_err(|e| e.to_string())
+}
+
+fn merge_dir_recursive(source: &std::path::Path, target: &std::path::Path, skip_files: &[String], is_root: bool) -> io::Result<()> {
+    if !target.exists() {
+        fs::create_dir_all(target)?;
+    }
+
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = path.file_name().unwrap().to_string_lossy().to_string();
+        
+        if is_root && skip_files.contains(&file_name) {
+            continue;
+        }
+
+        let target_path = target.join(&file_name);
+
+        if path.is_dir() {
+            merge_dir_recursive(&path, &target_path, skip_files, false)?;
+        } else {
+            if target_path.exists() {
+                if target_path.is_dir() {
+                    fs::remove_dir_all(&target_path).map_err(|e| e)?;
+                } else {
+                    fs::remove_file(&target_path).map_err(|e| e)?;
+                }
+            }
+            // Try rename first, fall back to copy+delete
+            if let Err(_) = fs::rename(&path, &target_path) {
+                fs::copy(&path, &target_path)?;
+                fs::remove_file(&path)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn merge_dir(source: String, target: String, skip_files: Option<Vec<String>>) -> Result<(), String> {
+    let source_path = PathBuf::from(&source);
+    let target_path = PathBuf::from(&target);
+    let skip = skip_files.unwrap_or_default();
+    
+    merge_dir_recursive(&source_path, &target_path, &skip, true).map_err(|e| e.to_string())
+}

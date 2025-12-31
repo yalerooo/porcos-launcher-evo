@@ -51,6 +51,10 @@ pub fn run() {
             commands::files::get_mod_icon,
             commands::files::get_mod_metadata,
             commands::files::run_installer,
+            commands::files::move_file,
+            commands::files::rename_file,
+            commands::files::remove_dir,
+            commands::files::merge_dir,
             set_complete
         ])
         .setup(|app| {

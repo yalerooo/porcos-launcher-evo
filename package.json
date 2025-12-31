@@ -1,7 +1,7 @@
 {
   "name": "porcoslauncherevo",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "Porcos Team",
   "type": "module",
   "scripts": {

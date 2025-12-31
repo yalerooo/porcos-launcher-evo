@@ -574,13 +574,56 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                         setInstallStage(`Extrayendo archivos...`);
                         // extract_zip now handles .rar via unrar crate
                         const skipFiles = [
-                            "servers.dat"
+                            "servers.dat",
+                            "instance.json",
+                            "instance_info.json",
+                            "porcos.json"
                         ];
                         await invoke('extract_zip', { 
                             zipPath, 
                             targetDir: instancePath,
                             skipFiles: skipFiles
                         });
+                    }
+
+                    // Check for nested folder structure and flatten if necessary
+                    // We check ALL subdirectories to see if they contain 'mods' or 'config'
+                    // This handles multi-part installs where subsequent parts might re-introduce nested folders
+                    console.log(`[Install] Checking for nested folders in ${instancePath}`);
+                    const files = await invoke('list_files', { path: instancePath }) as any[];
+                    const dirs = files.filter((f: any) => f.is_dir);
+                    
+                    for (const dir of dirs) {
+                         const subDirPath = await join(instancePath, dir.name);
+                         
+                         // Check for common Minecraft folders to identify a nested root
+                         const indicators = ['mods', 'config', 'saves', 'resourcepacks', 'options.txt'];
+                         let isNestedRoot = false;
+                         
+                         for (const indicator of indicators) {
+                             const checkPath = await join(subDirPath, indicator);
+                             if (await invoke('file_exists', { path: checkPath })) {
+                                 isNestedRoot = true;
+                                 break;
+                             }
+                         }
+                         
+                         if (isNestedRoot) {
+                             console.log(`[Install] Found nested root in ${dir.name}, merging...`);
+                             setInstallStage(`Reorganizando archivos (${dir.name})...`);
+                             
+                             try {
+                                await invoke('merge_dir', { 
+                                    source: subDirPath, 
+                                    target: instancePath,
+                                    skipFiles: ['porcos.json', 'instance_info.json', 'instance.json']
+                                });
+                                await invoke('remove_dir', { path: subDirPath });
+                                console.log(`[Install] Merged ${dir.name} successfully`);
+                             } catch (e) {
+                                 console.warn(`[Install] Failed to merge ${dir.name}:`, e);
+                             }
+                         }
                     }
                     
 
