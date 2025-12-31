@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Download, Loader2, AlertCircle, Package, ChevronDown } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import { X, Download, Loader2, AlertCircle, Package, ChevronDown, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { join, appCacheDir, homeDir } from '@tauri-apps/api/path';
@@ -30,6 +31,156 @@ const BACKGROUNDS = [
     "473168.jpg", "556713.png", "556719.jpg", "556720.jpg", "556722.jpg", "556724.jpg", 
     "556729.jpg", "556736.jpg", "557913.jpg", "558708.jpg", "733612.png"
 ];
+
+interface Option {
+    value: string;
+    label: string;
+}
+
+interface CustomSelectProps {
+    value: string;
+    onChange: (value: string) => void;
+    options: Option[];
+    placeholder?: string;
+    disabled?: boolean;
+}
+
+const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, placeholder = "Select...", disabled = false }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+
+    useEffect(() => {
+        if (isOpen && containerRef.current) {
+            const updatePosition = () => {
+                if (containerRef.current) {
+                    const rect = containerRef.current.getBoundingClientRect();
+                    setCoords({
+                        top: rect.bottom + 4,
+                        left: rect.left,
+                        width: rect.width
+                    });
+                }
+            };
+            
+            updatePosition();
+            window.addEventListener('resize', updatePosition);
+            window.addEventListener('scroll', updatePosition, true);
+            
+            return () => {
+                window.removeEventListener('resize', updatePosition);
+                window.removeEventListener('scroll', updatePosition, true);
+            };
+        }
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                containerRef.current && 
+                !containerRef.current.contains(event.target as Node) &&
+                dropdownRef.current &&
+                !dropdownRef.current.contains(event.target as Node)
+            ) {
+                setIsOpen(false);
+            }
+        };
+        
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    const selectedLabel = options.find(opt => opt.value === value)?.label || placeholder;
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <div 
+                className={`${styles.filterSelect} flex items-center justify-between ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+                <span className="truncate" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px' }}>
+                    {selectedLabel}
+                </span>
+                <ChevronDown 
+                    size={16} 
+                    className="text-white/50 transition-transform duration-200" 
+                    style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', flexShrink: 0 }} 
+                />
+            </div>
+
+            {createPortal(
+                <AnimatePresence>
+                    {isOpen && (
+                        <motion.div
+                            ref={dropdownRef}
+                            initial={{ opacity: 0, y: -5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -5 }}
+                            transition={{ duration: 0.1 }}
+                            className="fixed z-[9999] bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl overflow-y-auto"
+                            style={{ 
+                                position: 'fixed',
+                                top: coords.top,
+                                left: coords.left,
+                                width: coords.width,
+                                backgroundColor: '#18181b', 
+                                borderColor: '#27272a', 
+                                borderWidth: '1px', 
+                                borderStyle: 'solid',
+                                borderRadius: '0.5rem',
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+                                maxHeight: '15rem',
+                                overflowY: 'auto',
+                                zIndex: 9999
+                            }}
+                        >
+                            {options.length === 0 ? (
+                                <div className="p-3 text-sm text-zinc-500 text-center" style={{ padding: '0.75rem', color: '#71717a', textAlign: 'center', fontSize: '0.875rem' }}>
+                                    No options
+                                </div>
+                            ) : (
+                                options.map((opt) => (
+                                    <div
+                                        key={opt.value}
+                                        className="px-4 py-2 text-sm cursor-pointer hover:bg-[#27272a] transition-colors"
+                                        style={{ 
+                                            padding: '0.5rem 1rem', 
+                                            fontSize: '0.875rem', 
+                                            cursor: 'pointer',
+                                            backgroundColor: value === opt.value ? '#27272a' : 'transparent',
+                                            color: value === opt.value ? 'white' : '#e4e4e7',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between'
+                                        }}
+                                        onClick={() => {
+                                            onChange(opt.value);
+                                            setIsOpen(false);
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            if (value !== opt.value) e.currentTarget.style.backgroundColor = '#27272a';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            if (value !== opt.value) e.currentTarget.style.backgroundColor = 'transparent';
+                                        }}
+                                    >
+                                        <span>{opt.label}</span>
+                                        {value === opt.value && <Check size={14} className="text-[#ffbfba]" />}
+                                    </div>
+                                ))
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
+        </div>
+    );
+};
 
 interface ModpackInstallModalProps {
     isOpen: boolean;
@@ -1077,33 +1228,21 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                                     <div className={styles.filters}>
                                         <div className={styles.filterGroup}>
                                             <label className={styles.filterLabel}>Versión de Minecraft</label>
-                                            <div className="relative">
-                                                <select 
-                                                    value={filterGameVersion}
-                                                    onChange={(e) => setFilterGameVersion(e.target.value)}
-                                                    className={styles.filterSelect}
-                                                >
-                                                    {availableGameVersions.map(v => (
-                                                        <option key={v} value={v}>{v}</option>
-                                                    ))}
-                                                </select>
-                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" size={16} />
-                                            </div>
+                                            <CustomSelect 
+                                                value={filterGameVersion}
+                                                onChange={setFilterGameVersion}
+                                                options={availableGameVersions.map(v => ({ value: v, label: v }))}
+                                                placeholder="Todas las versiones"
+                                            />
                                         </div>
                                         <div className={styles.filterGroup}>
                                             <label className={styles.filterLabel}>Modloader</label>
-                                            <div className="relative">
-                                                <select 
-                                                    value={filterLoader}
-                                                    onChange={(e) => setFilterLoader(e.target.value)}
-                                                    className={styles.filterSelect}
-                                                >
-                                                    {availableLoaders.map(l => (
-                                                        <option key={l} value={l}>{l}</option>
-                                                    ))}
-                                                </select>
-                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" size={16} />
-                                            </div>
+                                            <CustomSelect 
+                                                value={filterLoader}
+                                                onChange={setFilterLoader}
+                                                options={availableLoaders.map(l => ({ value: l, label: l }))}
+                                                placeholder="Todos los loaders"
+                                            />
                                         </div>
                                     </div>
 
@@ -1114,31 +1253,24 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                                                 No hay versiones compatibles con los filtros seleccionados.
                                             </div>
                                         ) : (
-                                            <div className="relative">
-                                                <select
-                                                    value={selectedVersion ? (modpack.source === 'modrinth' ? selectedVersion.id : (modpack.source === 'porcos' ? selectedVersion.version : selectedVersion.id)) : ''}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        const v = filteredVersions.find((ver: any) => (modpack.source === 'modrinth' ? ver.id : (modpack.source === 'porcos' ? ver.version : ver.id)).toString() === val);
-                                                        setSelectedVersion(v);
-                                                    }}
-                                                    className={styles.filterSelect}
-                                                    style={{ width: '100%' }}
-                                                >
-                                                    {filteredVersions.map((v: any) => {
-                                                        const id = modpack.source === 'modrinth' ? v.id : (modpack.source === 'porcos' ? v.version : v.id);
-                                                        const name = modpack.source === 'modrinth' ? v.name : (modpack.source === 'porcos' ? v.version : v.displayName);
-                                                        const gameVersions = modpack.source === 'modrinth' ? v.game_versions.join(', ') : (modpack.source === 'porcos' ? v.minecraftVersion : v.gameVersions.join(', '));
-                                                        
-                                                        return (
-                                                            <option key={id} value={id}>
-                                                                {name} - Minecraft {gameVersions}
-                                                            </option>
-                                                        );
-                                                    })}
-                                                </select>
-                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" size={16} />
-                                            </div>
+                                            <CustomSelect
+                                                value={selectedVersion ? (modpack.source === 'modrinth' ? selectedVersion.id : (modpack.source === 'porcos' ? selectedVersion.version : selectedVersion.id)) : ''}
+                                                onChange={(val) => {
+                                                    const v = filteredVersions.find((ver: any) => (modpack.source === 'modrinth' ? ver.id : (modpack.source === 'porcos' ? ver.version : ver.id)).toString() === val);
+                                                    setSelectedVersion(v);
+                                                }}
+                                                options={filteredVersions.map((v: any) => {
+                                                    const id = modpack.source === 'modrinth' ? v.id : (modpack.source === 'porcos' ? v.version : v.id);
+                                                    const name = modpack.source === 'modrinth' ? v.name : (modpack.source === 'porcos' ? v.version : v.displayName);
+                                                    const gameVersions = modpack.source === 'modrinth' ? v.game_versions.join(', ') : (modpack.source === 'porcos' ? v.minecraftVersion : v.gameVersions.join(', '));
+                                                    
+                                                    return {
+                                                        value: id.toString(),
+                                                        label: `${name} - Minecraft ${gameVersions}`
+                                                    };
+                                                })}
+                                                placeholder="Selecciona una versión"
+                                            />
                                         )}
                                     </div>
                                 </div>
