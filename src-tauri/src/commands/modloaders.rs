@@ -128,15 +128,24 @@ pub async fn get_neoforge_versions(minecraft_version: String) -> Result<Vec<Load
     // NeoForge versions are like "20.4.106-beta" where "20.4" corresponds to MC "1.20.4"
     // We need to map minecraft_version (e.g. "1.20.4") to NeoForge major version (e.g. "20.4")
     
-    // Simple heuristic: remove "1." prefix if present
-    let nf_prefix = if minecraft_version.starts_with("1.") {
-        &minecraft_version[2..]
+    let parts: Vec<&str> = minecraft_version.split('.').collect();
+    let nf_prefix = if parts.len() >= 2 && parts[0] == "1" {
+        // 1.21 -> 21.0.
+        // 1.21.1 -> 21.1.
+        let major = parts[1];
+        let minor = if parts.len() > 2 { parts[2] } else { "0" };
+        format!("{}.{}.", major, minor)
     } else {
-        &minecraft_version
+        // Fallback
+        if minecraft_version.starts_with("1.") {
+             format!("{}.", &minecraft_version[2..])
+        } else {
+             format!("{}.", minecraft_version)
+        }
     };
 
-    let filtered_versions: Vec<LoaderVersion> = data.versions.into_iter()
-        .filter(|v| v.starts_with(nf_prefix))
+    let mut filtered_versions: Vec<LoaderVersion> = data.versions.into_iter()
+        .filter(|v| v.starts_with(&nf_prefix))
         .map(|v| {
             let stable = !v.contains("-beta");
             LoaderVersion {
@@ -147,6 +156,9 @@ pub async fn get_neoforge_versions(minecraft_version: String) -> Result<Vec<Load
             }
         })
         .collect();
+
+    // Sort: Newest first (descending)
+    filtered_versions.sort_by(|a, b| compare_versions(&b.version, &a.version));
 
     Ok(filtered_versions)
 }

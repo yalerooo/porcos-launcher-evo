@@ -353,30 +353,11 @@ impl MinecraftLauncher {
         // 6. Find Java
         use crate::launcher::java_detector;
         self.emit_progress("Buscando Java...", 95, 100, 92.0);
-        let mut java_path = if let Some(custom_java) = options.java_path {
+        let java_path = if let Some(custom_java) = options.java_path {
             custom_java
         } else {
             java_detector::find_java()?
         };
-
-        #[cfg(target_os = "windows")]
-        {
-            // Prefer javaw.exe on Windows to avoid console window
-            if java_path.to_string_lossy() == "java" {
-                // If using system java, try javaw
-                // We assume javaw is in PATH if java is
-                java_path = PathBuf::from("javaw");
-            } else if let Some(file_name) = java_path.file_name() {
-                let name = file_name.to_string_lossy().to_lowercase();
-                if name == "java.exe" {
-                    let javaw_path = java_path.with_file_name("javaw.exe");
-                    if javaw_path.exists() {
-                        println!("[MinecraftLauncher] Swapping java.exe for javaw.exe");
-                        java_path = javaw_path;
-                    }
-                }
-            }
-        }
         
         println!("[MinecraftLauncher] Using Java: {:?}", java_path);
         

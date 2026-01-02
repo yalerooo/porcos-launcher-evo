@@ -126,8 +126,8 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                         break;
                 }
 
-                // Reverse to show newest first
-                versions = versions.reverse();
+                // Versions are already sorted newest first by backend
+                // versions = versions.reverse();
 
                 setAvailableModLoaderVersions(versions);
                 if (versions.length > 0) {
