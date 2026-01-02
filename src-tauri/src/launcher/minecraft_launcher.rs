@@ -353,11 +353,30 @@ impl MinecraftLauncher {
         // 6. Find Java
         use crate::launcher::java_detector;
         self.emit_progress("Buscando Java...", 95, 100, 92.0);
-        let java_path = if let Some(custom_java) = options.java_path {
+        let mut java_path = if let Some(custom_java) = options.java_path {
             custom_java
         } else {
             java_detector::find_java()?
         };
+
+        #[cfg(target_os = "windows")]
+        {
+            // Prefer javaw.exe on Windows to avoid console window
+            if java_path.to_string_lossy() == "java" {
+                // If using system java, try javaw
+                // We assume javaw is in PATH if java is
+                java_path = PathBuf::from("javaw");
+            } else if let Some(file_name) = java_path.file_name() {
+                let name = file_name.to_string_lossy().to_lowercase();
+                if name == "java.exe" {
+                    let javaw_path = java_path.with_file_name("javaw.exe");
+                    if javaw_path.exists() {
+                        println!("[MinecraftLauncher] Swapping java.exe for javaw.exe");
+                        java_path = javaw_path;
+                    }
+                }
+            }
+        }
         
         println!("[MinecraftLauncher] Using Java: {:?}", java_path);
         
@@ -377,7 +396,7 @@ impl MinecraftLauncher {
         let mut substitutions = std::collections::HashMap::new();
         substitutions.insert("${natives_directory}", natives_dir.to_string_lossy().to_string());
         substitutions.insert("${launcher_name}", "PorcosLauncher".to_string());
-        substitutions.insert("${launcher_version}", "0.1.2".to_string());
+        substitutions.insert("${launcher_version}", "0.1.3".to_string());
         substitutions.insert("${classpath}", classpath.clone());
         substitutions.insert("${library_directory}", libraries_dir.to_string_lossy().to_string());
         substitutions.insert("${classpath_separator}", if cfg!(windows) { ";" } else { ":" }.to_string());

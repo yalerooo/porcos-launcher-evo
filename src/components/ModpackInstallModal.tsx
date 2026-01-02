@@ -270,6 +270,13 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
             fetchVersions();
         } else {
             // Reset state on close
+            
+            // Cleanup temp dir if it exists (e.g. closed after error)
+            if (tempDirRef.current) {
+                invoke('remove_dir', { path: tempDirRef.current }).catch(e => console.warn("Cleanup on close failed", e));
+                tempDirRef.current = null;
+            }
+
             setVersions([]);
             setSelectedVersion(null);
             setInstallStage('');
@@ -421,9 +428,12 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 removeInstance(instanceIdRef.current);
             }
             
-            // Delete temp dir if we tracked it (we usually use a fixed temp dir structure)
-            // We can try to delete the specific temp folder for this install if we had one.
-            // For now, we rely on OS or next run to clear temp, or we can try to clear the specific files we downloaded.
+            // Delete temp dir if we tracked it
+            if (tempDirRef.current) {
+                console.log("Deleting temp dir:", tempDirRef.current);
+                await invoke('remove_dir', { path: tempDirRef.current });
+                tempDirRef.current = null;
+            }
             
         } catch (e) {
             console.error("Cleanup failed", e);
@@ -789,6 +799,17 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                     }
                 }
                 
+                // Cleanup temp dir
+                if (tempDirRef.current) {
+                    try {
+                        await invoke('remove_dir', { path: tempDirRef.current });
+                        console.log("Temp dir cleaned up");
+                        tempDirRef.current = null;
+                    } catch (e) {
+                        console.warn("Failed to clean up temp dir", e);
+                    }
+                }
+
                 setInstallStage('Finalizando...');
                 setProgress(100);
                 setTimeout(() => {
@@ -1127,6 +1148,17 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
             // For now, let's assume mods are the most important part.
             // TODO: Implement copy_dir_recursive in Rust.
             
+            // Cleanup temp dir
+            if (tempDirRef.current) {
+                try {
+                    await invoke('remove_dir', { path: tempDirRef.current });
+                    console.log("Temp dir cleaned up");
+                    tempDirRef.current = null;
+                } catch (e) {
+                    console.warn("Failed to clean up temp dir", e);
+                }
+            }
+
             setInstallStage('Finalizando...');
             setProgress(100);
             

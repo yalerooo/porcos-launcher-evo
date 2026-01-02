@@ -842,6 +842,10 @@ const Home: React.FC = () => {
                         console.log("[Home] Updating stale selectedInstance with migrated data");
                         setSelectedInstance(updated);
                     }
+                } else if (newOrderedInstances.length > 0) {
+                    // Auto-select first instance if none selected
+                    console.log("[Home] Auto-selecting first instance");
+                    setSelectedInstance(newOrderedInstances[0]);
                 }
 
             } catch (error) {
