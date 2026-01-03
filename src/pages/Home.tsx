@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Settings, Plus, Image as ImageIcon, X, Trash2, Check, Play, Cpu, Gamepad2, ChevronDown, ArrowLeft, Package, Download, AlertCircle, Upload } from 'lucide-react';
+import { Box, Settings, Plus, Check, Play, Cpu, Gamepad2, ChevronDown, Package, Download, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
-import { open } from '@tauri-apps/plugin-dialog';
+
 
 import styles from './Home.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
+import InstanceSettings from '@/components/InstanceSettings';
 
 const BACKGROUNDS = [
     "1021170.png", "1102409.png", "1117616.jpg", "1117617.jpg", "1117618.jpg", "1117621.jpg", 
@@ -103,6 +104,8 @@ const InstanceIcon = ({ instance, isActive }: { instance: Instance, isActive: bo
     );
 };
 
+
+
 const Home: React.FC = () => {
     const { 
         instances, selectedInstance, isLaunching, setIsLaunching, addLog, 
@@ -112,30 +115,16 @@ const Home: React.FC = () => {
         setLaunchStartTime
     } = useLauncherStore();
     const { user } = useAuthStore();
-    const [showBackgroundSelector, setShowBackgroundSelector] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
-    const [settingsTab, setSettingsTab] = useState<'general' | 'versions'>('general');
-    const [editingName, setEditingName] = useState('');
-    const [versionToAdd, setVersionToAdd] = useState('');
-    const [isVersionSelectOpen, setIsVersionSelectOpen] = useState(false);
     const [isMainVersionDropdownOpen, setIsMainVersionDropdownOpen] = useState(false);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [toastType, setToastType] = useState<'success' | 'error'>('success');
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
     
     // Create Instance State
     const [showCreateModal, setShowCreateModal] = useState(false);
 
     // Background Image State for Active Instance
     const [activeBgSrc, setActiveBgSrc] = useState<string>("");
-
-    // Add Version with Loader State
-    const [addVersionModLoader, setAddVersionModLoader] = useState('Vanilla');
-    const [addVersionLoaderVersion, setAddVersionLoaderVersion] = useState('');
-    const [availableAddVersionLoaders, setAvailableAddVersionLoaders] = useState<any[]>([]);
-    const [isAddVersionLoaderOpen, setIsAddVersionLoaderOpen] = useState(false);
-    const [isAddVersionLoaderVersionOpen, setIsAddVersionLoaderVersionOpen] = useState(false);
 
     // Default to first if none selected
     const activeInstance = selectedInstance || instances[0];
@@ -445,243 +434,19 @@ const Home: React.FC = () => {
         }
     };
 
-    // Effect for Add Version Loader fetching
-    useEffect(() => {
-        const fetchLoaders = async () => {
-            if (!versionToAdd || addVersionModLoader === 'Vanilla') {
-                setAvailableAddVersionLoaders([]);
-                return;
-            }
-
-            try {
-                const { invoke } = await import("@tauri-apps/api/core");
-                let versions: any[] = [];
-                
-                switch (addVersionModLoader) {
-                    case 'Fabric':
-                        versions = await invoke('get_fabric_versions', { minecraftVersion: versionToAdd });
-                        break;
-                    case 'Quilt':
-                        versions = await invoke('get_quilt_versions', { minecraftVersion: versionToAdd });
-                        break;
-                    case 'NeoForge':
-                        versions = await invoke('get_neoforge_versions', { minecraftVersion: versionToAdd });
-                        break;
-                    case 'Forge':
-                        versions = await invoke('get_forge_versions', { minecraftVersion: versionToAdd });
-                        break;
-                }
-
-                setAvailableAddVersionLoaders(versions);
-                if (versions.length > 0) {
-                    setAddVersionLoaderVersion(versions[0].version);
-                } else {
-                    setAddVersionLoaderVersion('');
-                }
-            } catch (error) {
-                console.error(`Failed to fetch ${addVersionModLoader} versions for ${versionToAdd}:`, error);
-            }
-        };
-        
-        fetchLoaders();
-    }, [versionToAdd, addVersionModLoader]);
 
 
 
-    const handleSelectCustomBackground = async () => {
-        try {
-            const file = await open({
-                multiple: false,
-                filters: [{
-                    name: 'Image',
-                    extensions: ['png', 'jpg', 'jpeg', 'webp']
-                }]
-            });
-            
-            if (file) {
-                handleUpdateBackground(file as string);
-            }
-        } catch (err) {
-            console.error("Failed to select image:", err);
-        }
-    };
 
-    const handleUpdateBackground = async (filename: string) => {
-        if (activeInstance) {
-            try {
-                const { invoke } = await import("@tauri-apps/api/core");
-                await invoke("update_instance", {
-                    id: activeInstance.id,
-                    backgroundImage: filename
-                });
-            } catch (e) {
-                console.error("Failed to update background on backend", e);
-            }
-            updateInstance(activeInstance.id, { backgroundImage: filename });
-            setShowBackgroundSelector(false);
-        }
-    };
 
-    useEffect(() => {
-        if (!showSettingsModal || !activeInstance || !editingName || editingName === activeInstance.name) return;
 
-        const timer = setTimeout(async () => {
-            try {
-                const { invoke } = await import("@tauri-apps/api/core");
-                await invoke("update_instance", {
-                    id: activeInstance.id,
-                    name: editingName
-                });
-                updateInstance(activeInstance.id, { name: editingName });
-                setToastMessage("Nombre cambiado");
-                setTimeout(() => setToastMessage(null), 3000);
-            } catch (e) {
-                console.error("Failed to rename instance", e);
-            }
-        }, 1000);
 
-        return () => clearTimeout(timer);
-    }, [editingName, activeInstance, showSettingsModal]);
 
-    const handleDeleteInstance = () => {
-        if (!activeInstance) return;
-        setShowDeleteConfirm(true);
-    };
 
-    const confirmDeleteInstance = async () => {
-        if (!activeInstance) return;
-        setIsDeleting(true);
-        
-        try {
-            const { invoke } = await import("@tauri-apps/api/core");
-            await invoke("delete_instance", { id: activeInstance.id });
-            removeInstance(activeInstance.id);
-            setSelectedInstance(null);
-            setShowSettingsModal(false);
-            setShowDeleteConfirm(false);
-            setToastType('success');
-            setToastMessage("Instancia eliminada correctamente");
-            setTimeout(() => setToastMessage(null), 3000);
-        } catch (e) {
-            console.error("Failed to delete instance", e);
-            setToastType('error');
-            setToastMessage(`Error al eliminar: ${e}`);
-            setTimeout(() => setToastMessage(null), 5000);
-        } finally {
-            setIsDeleting(false);
-        }
-    };
 
-    const handleAddVersion = async () => {
-        if (!activeInstance || !versionToAdd) return;
-        
-        // Construct the version string
-        // Format: "1.20.1" or "1.20.1 (Fabric 0.14.22)"
-        let newVersionString = versionToAdd;
-        if (addVersionModLoader !== 'Vanilla' && addVersionLoaderVersion) {
-            newVersionString = `${versionToAdd} (${addVersionModLoader} ${addVersionLoaderVersion})`;
-        }
 
-        let currentVersions = [...(activeInstance.versions || [activeInstance.version])];
-        
-        // FIX: Before adding a new version, ensure the CURRENT active version string includes its modloader info if it's not Vanilla.
-        // This prevents losing the modloader state when switching away from it.
-        const currentSelectedVer = activeInstance.selectedVersion || activeInstance.version;
-        
-        // If current version string is "naked" (no parens) but we have a modloader, upgrade it in the list
-        if (activeInstance.modLoader && !currentSelectedVer.includes('(')) {
-             const upgradedVer = `${currentSelectedVer} (${activeInstance.modLoader} ${activeInstance.modLoaderVersion || ''})`.trim().replace(/\s+\)/, ')');
-             
-             // Replace in list
-             currentVersions = currentVersions.map(v => v === currentSelectedVer ? upgradedVer : v);
-             
-             // We also need to update the instance state to reflect this change immediately, 
-             // otherwise the backend update below might use stale data or we might have a mismatch.
-             // However, we are about to send a full update to the backend anyway.
-        }
 
-        if (currentVersions.includes(newVersionString)) {
-            setToastMessage("Esta versión ya está instalada");
-            setTimeout(() => setToastMessage(null), 3000);
-            return;
-        }
 
-        const newVersions = [...currentVersions, newVersionString];
-        
-        try {
-            const { invoke } = await import("@tauri-apps/api/core");
-            
-            const updatePayload: any = {
-                id: activeInstance.id,
-                versions: newVersions,
-            };
-
-            // If we upgraded the current version string, we should update selectedVersion too
-            // But wait, if we are adding a NEW version, we are about to switch to IT.
-            // So the old version becomes just an entry in the list.
-            // BUT, if we don't update selectedVersion to the new string, the UI might get confused if we didn't switch?
-            // The logic below switches to the NEW version.
-            
-            // If we are auto-selecting the new version, update the global state too
-            if (addVersionModLoader !== 'Vanilla') {
-                updatePayload.modLoader = addVersionModLoader;
-                updatePayload.modLoaderVersion = addVersionLoaderVersion;
-            } else {
-                updatePayload.modLoader = null;
-                updatePayload.modLoaderVersion = null;
-            }
-            
-            // Also update selectedVersion to the new one
-            updatePayload.selectedVersion = newVersionString;
-
-            await invoke("update_instance", updatePayload);
-            
-            updateInstance(activeInstance.id, { 
-                versions: newVersions,
-                selectedVersion: newVersionString,
-                modLoader: addVersionModLoader === 'Vanilla' ? undefined : addVersionModLoader,
-                modLoaderVersion: addVersionModLoader === 'Vanilla' ? undefined : addVersionLoaderVersion
-            });
-            
-            setVersionToAdd('');
-            setAddVersionModLoader('Vanilla');
-            setToastMessage("Versión añadida correctamente");
-            setTimeout(() => setToastMessage(null), 3000);
-        } catch (e) {
-            console.error("Failed to add version", e);
-        }
-    };
-
-    const handleRemoveVersion = async (versionToRemove: string) => {
-        if (!activeInstance) return;
-        
-        const currentVersions = activeInstance.versions || [activeInstance.version];
-        if (currentVersions.length <= 1) return; // Cannot remove last version
-
-        const newVersions = currentVersions.filter(v => v !== versionToRemove);
-        
-        // If we removed the selected version, switch to another one
-        let newSelectedVersion = activeInstance.selectedVersion || activeInstance.version;
-        if (newSelectedVersion === versionToRemove) {
-            newSelectedVersion = newVersions[0];
-        }
-
-        try {
-            const { invoke } = await import("@tauri-apps/api/core");
-            await invoke("update_instance", {
-                id: activeInstance.id,
-                versions: newVersions,
-                // Also update selected version if needed, but backend doesn't store selectedVersion yet?
-                // Store only persists selectedVersion in local storage via zustand persist.
-            });
-            updateInstance(activeInstance.id, { 
-                versions: newVersions,
-                selectedVersion: newSelectedVersion
-            });
-        } catch (e) {
-            console.error("Failed to remove version", e);
-        }
-    };
 
     const handleVersionChange = async (version: string) => {
         if (!activeInstance) return;
@@ -1261,7 +1026,6 @@ const Home: React.FC = () => {
                 <div className="absolute top-4 right-4 z-50">
                         <button 
                         onClick={() => {
-                            setEditingName(activeInstance?.name || '');
                             setShowSettingsModal(true);
                         }}
                         className={styles.settingsButton}
@@ -1421,467 +1185,14 @@ const Home: React.FC = () => {
                 {/* Settings Modal */}
                 <AnimatePresence>
                     {showSettingsModal && (
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className={styles.settingsOverlay}
-                        >
-                            {/* Header */}
-                            <div className={styles.settingsHeader} data-tauri-drag-region>
-                                <button 
-                                    onClick={() => setShowSettingsModal(false)}
-                                    className={styles.backSettingsButton}
-                                >
-                                    <ArrowLeft size={24} />
-                                    <span>Volver</span>
-                                </button>
-                                <h3 className={styles.settingsTitle}>Ajustes de Instancia</h3>
-                            </div>
-
-                            {/* Body */}
-                            <div className={styles.settingsBody}>
-                                {/* Sidebar */}
-                                <div className={styles.settingsSidebar}>
-                                    <button
-                                        onClick={() => setSettingsTab('general')}
-                                        className={cn(
-                                            styles.settingsNavItem,
-                                            settingsTab === 'general' && styles.settingsNavItemActive
-                                        )}
-                                    >
-                                        <Settings size={20} />
-                                        General
-                                    </button>
-                                    <button
-                                        onClick={() => setSettingsTab('versions')}
-                                        className={cn(
-                                            styles.settingsNavItem,
-                                            settingsTab === 'versions' && styles.settingsNavItemActive
-                                        )}
-                                    >
-                                        <Box size={20} />
-                                        Versiones
-                                    </button>
-                                </div>
-
-                                {/* Main Content */}
-                                <div className={styles.settingsMain}>
-                                    {settingsTab === 'general' && (
-                                        <div className="max-w-3xl mx-auto">
-                                            <h4 className={styles.settingsSectionTitle}>Configuración General</h4>
-                                            
-                                            {/* Identity Card */}
-                                            <div className={styles.settingsCard}>
-                                                <div className={styles.cardTitle}>
-                                                    <Box size={20} className="text-[#ffbfba]" />
-                                                    Identidad
-                                                </div>
-                                                <p className={styles.cardDescription}>
-                                                    Personaliza cómo se ve tu instancia en el lanzador.
-                                                </p>
-                                                
-                                                <div className={styles.inputGroup}>
-                                                    <label className={styles.inputLabel}>Nombre de la Instancia</label>
-                                                    <input
-                                                        type="text"
-                                                        value={editingName}
-                                                        onChange={(e) => setEditingName(e.target.value)}
-                                                        className={styles.textInput}
-                                                        placeholder="Nombre de la instancia"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Appearance Card */}
-                                            <div className={styles.settingsCard}>
-                                                <div className={styles.cardTitle}>
-                                                    <ImageIcon size={20} className="text-[#ffbfba]" />
-                                                    Apariencia
-                                                </div>
-                                                <p className={styles.cardDescription}>
-                                                    Elige un fondo para tu instancia.
-                                                </p>
-                                                
-                                                <div className={styles.inputGroup}>
-                                                    <label className={styles.inputLabel}>Fondo Personalizado</label>
-                                                    <button 
-                                                        onClick={() => setShowBackgroundSelector(true)}
-                                                        className={cn(styles.actionButton, styles.primaryButton)}
-                                                    >
-                                                        <ImageIcon size={20} />
-                                                        Cambiar Fondo
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Danger Zone Card */}
-                                            <div className={cn(styles.settingsCard, "border-red-500/20 bg-red-500/5")}>
-                                                <div className={cn(styles.cardTitle, "text-red-400")}>
-                                                    <Trash2 size={20} />
-                                                    Zona de Peligro
-                                                </div>
-                                                <p className={styles.cardDescription}>
-                                                    Acciones irreversibles. Ten cuidado.
-                                                </p>
-                                                
-                                                <button 
-                                                    onClick={handleDeleteInstance}
-                                                    className={cn(styles.actionButton, styles.dangerButton)}
-                                                >
-                                                    <Trash2 size={20} />
-                                                    Eliminar Instancia
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {settingsTab === 'versions' && (
-                                        <div className="max-w-3xl mx-auto">
-                                            <h4 className={styles.settingsSectionTitle}>Gestión de Versiones</h4>
-                                            
-                                            {/* Add Version Card */}
-                                            <div className={cn(styles.settingsCard, (isVersionSelectOpen || isAddVersionLoaderOpen || isAddVersionLoaderVersionOpen) ? styles.settingsCardActive : "")}>
-                                                <div className={styles.cardTitle}>
-                                                    <Plus size={20} className="text-[#ffbfba]" />
-                                                    Añadir Versión
-                                                </div>
-                                                <p className={styles.cardDescription}>
-                                                    Instala una nueva versión con su cargador de mods preferido.
-                                                </p>
-                                                
-                                                <div className="space-y-6">
-                                                    {/* Version Select */}
-                                                    <div>
-                                                        <label className={styles.inputLabel}>Versión de Minecraft</label>
-                                                        <div className={styles.dropdownContainer}>
-                                                            <div 
-                                                                onClick={() => setIsVersionSelectOpen(!isVersionSelectOpen)}
-                                                                className={cn(
-                                                                    styles.dropdownTrigger,
-                                                                    isVersionSelectOpen ? styles.dropdownTriggerActive : ""
-                                                                )}
-                                                            >
-                                                                <span className="truncate">
-                                                                    {versionToAdd 
-                                                                        ? `${versionToAdd} ${versions.find((v: any) => v.id === versionToAdd)?.version_type ? `(${versions.find((v: any) => v.id === versionToAdd)?.version_type})` : ''}`
-                                                                        : 'Seleccionar versión'}
-                                                                </span>
-                                                                <ChevronDown size={16} className={cn("text-[#a1a1aa] transition-transform duration-200", isVersionSelectOpen ? "rotate-180" : "")} />
-                                                            </div>
-                                                            
-                                                            <AnimatePresence>
-                                                                {isVersionSelectOpen && (
-                                                                    <>
-                                                                        <div className="fixed inset-0 z-40" onClick={() => setIsVersionSelectOpen(false)} />
-                                                                        <motion.div
-                                                                            initial={{ opacity: 0, y: -10 }}
-                                                                            animate={{ opacity: 1, y: 0 }}
-                                                                            exit={{ opacity: 0, y: -10 }}
-                                                                            className={cn(
-                                                                                styles.dropdownMenu,
-                                                                                styles.dropdownScrollbar
-                                                                            )}
-                                                                        >
-                                                                            {versions.map((v: any) => (
-                                                                                <div
-                                                                                    key={v.id}
-                                                                                    onClick={() => {
-                                                                                        setVersionToAdd(v.id);
-                                                                                        setIsVersionSelectOpen(false);
-                                                                                    }}
-                                                                                    className={cn(
-                                                                                        styles.dropdownItem,
-                                                                                        versionToAdd === v.id ? styles.dropdownItemActive : ""
-                                                                                    )}
-                                                                                >
-                                                                                    <span>{v.id}</span>
-                                                                                    {v.version_type && (
-                                                                                        <span className="text-xs text-white/40 uppercase border border-white/10 px-2 py-0.5 rounded">
-                                                                                            {v.version_type}
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                            ))}
-                                                                        </motion.div>
-                                                                    </>
-                                                                )}
-                                                            </AnimatePresence>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Mod Loader Select (Only if version selected) */}
-                                                    {versionToAdd && (
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            <div>
-                                                                <label className={styles.inputLabel}>Mod Loader</label>
-                                                                <div className={styles.dropdownContainer}>
-                                                                    <div 
-                                                                        onClick={() => setIsAddVersionLoaderOpen(!isAddVersionLoaderOpen)}
-                                                                        className={cn(
-                                                                            styles.dropdownTrigger,
-                                                                            isAddVersionLoaderOpen ? styles.dropdownTriggerActive : ""
-                                                                        )}
-                                                                    >
-                                                                        <span className="truncate">{addVersionModLoader}</span>
-                                                                        <ChevronDown size={16} className={cn("text-[#a1a1aa] transition-transform duration-200", isAddVersionLoaderOpen ? "rotate-180" : "")} />
-                                                                    </div>
-                                                                    
-                                                                    <AnimatePresence>
-                                                                        {isAddVersionLoaderOpen && (
-                                                                            <>
-                                                                                <div className="fixed inset-0 z-40" onClick={() => setIsAddVersionLoaderOpen(false)} />
-                                                                                <motion.div
-                                                                                    initial={{ opacity: 0, y: -10 }}
-                                                                                    animate={{ opacity: 1, y: 0 }}
-                                                                                    exit={{ opacity: 0, y: -10 }}
-                                                                                    className={cn(
-                                                                                        styles.dropdownMenu,
-                                                                                        styles.dropdownScrollbar
-                                                                                    )}
-                                                                                >
-                                                                                    {['Vanilla', 'Forge', 'Fabric', 'Quilt', 'NeoForge'].map((loader) => (
-                                                                                        <div
-                                                                                            key={loader}
-                                                                                            onClick={() => {
-                                                                                                setAddVersionModLoader(loader);
-                                                                                                setIsAddVersionLoaderOpen(false);
-                                                                                            }}
-                                                                                            className={cn(
-                                                                                                styles.dropdownItem,
-                                                                                                addVersionModLoader === loader ? styles.dropdownItemActive : ""
-                                                                                            )}
-                                                                                        >
-                                                                                            {loader}
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </motion.div>
-                                                                            </>
-                                                                        )}
-                                                                    </AnimatePresence>
-                                                                </div>
-                                                            </div>
-
-                                                            {addVersionModLoader !== 'Vanilla' && (
-                                                                <div>
-                                                                    <label className={styles.inputLabel}>Versión del Loader</label>
-                                                                    <div className={styles.dropdownContainer}>
-                                                                        <div 
-                                                                            onClick={() => setIsAddVersionLoaderVersionOpen(!isAddVersionLoaderVersionOpen)}
-                                                                            className={cn(
-                                                                                styles.dropdownTrigger,
-                                                                                isAddVersionLoaderVersionOpen ? styles.dropdownTriggerActive : ""
-                                                                            )}
-                                                                        >
-                                                                            <span className="truncate">{addVersionLoaderVersion || "Seleccionar"}</span>
-                                                                            <ChevronDown size={16} className={cn("text-[#a1a1aa] transition-transform duration-200", isAddVersionLoaderVersionOpen ? "rotate-180" : "")} />
-                                                                        </div>
-                                                                        
-                                                                        <AnimatePresence>
-                                                                            {isAddVersionLoaderVersionOpen && (
-                                                                                <>
-                                                                                    <div className="fixed inset-0 z-40" onClick={() => setIsAddVersionLoaderVersionOpen(false)} />
-                                                                                    <motion.div
-                                                                                        initial={{ opacity: 0, y: -10 }}
-                                                                                        animate={{ opacity: 1, y: 0 }}
-                                                                                        exit={{ opacity: 0, y: -10 }}
-                                                                                        className={cn(
-                                                                                            styles.dropdownMenu,
-                                                                                            styles.dropdownScrollbar
-                                                                                        )}
-                                                                                    >
-                                                                                        {availableAddVersionLoaders.map((v: any) => (
-                                                                                            <div
-                                                                                                key={v.version}
-                                                                                                onClick={() => {
-                                                                                                    setAddVersionLoaderVersion(v.version);
-                                                                                                    setIsAddVersionLoaderVersionOpen(false);
-                                                                                                }}
-                                                                                                className={cn(
-                                                                                                    styles.dropdownItem,
-                                                                                                    addVersionLoaderVersion === v.version ? styles.dropdownItemActive : ""
-                                                                                                )}
-                                                                                            >
-                                                                                                <span>{v.version}</span>
-                                                                                                {v.stable && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded">Stable</span>}
-                                                                                            </div>
-                                                                                        ))}
-                                                                                        {availableAddVersionLoaders.length === 0 && (
-                                                                                            <div className="px-4 py-3 text-white/50 text-sm">No hay versiones disponibles</div>
-                                                                                        )}
-                                                                                    </motion.div>
-                                                                                </>
-                                                                            )}
-                                                                        </AnimatePresence>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                    <button 
-                                                        onClick={handleAddVersion}
-                                                        disabled={!versionToAdd || (addVersionModLoader !== 'Vanilla' && !addVersionLoaderVersion)}
-                                                        className={cn(styles.actionButton, styles.primaryButton)}
-                                                        style={{ marginTop: '3rem' }}
-                                                    >
-                                                        <Plus size={20} />
-                                                        Instalar
-                                                    </button>
-                                                </div>
-                                            </div>
-
-
-
-                                            {/* Installed Versions Card */}
-                                            <div className={styles.settingsCard}>
-                                                <div className={styles.cardTitle}>
-                                                    <Box size={20} className="text-[#ffbfba]" />
-                                                    Versiones Instaladas
-                                                </div>
-                                                <p className={styles.cardDescription}>
-                                                    Gestiona las versiones de Minecraft instaladas.
-                                                </p>
-
-                                                <div className="flex flex-col gap-6">
-                                                    {(activeInstance?.versions || [activeInstance?.version]).map((v) => {
-                                                        const match = v.match(/^(.*) \((.*) (.*)\)$/);
-                                                        let mcVer = match ? match[1] : v;
-                                                        let loaderType = match ? match[2] : "Vanilla";
-                                                        let loaderVer = match ? match[3] : "";
-
-                                                        // Fallback for legacy instances where version is stored as "1.21.4" but has modloader metadata
-                                                        // Only apply if this version entry matches the instance's base version
-                                                        if (!match && v === activeInstance?.version && activeInstance?.modLoader) {
-                                                            loaderType = activeInstance.modLoader;
-                                                            loaderVer = activeInstance.modLoaderVersion || "";
-                                                            // Capitalize first letter if needed
-                                                            loaderType = loaderType.charAt(0).toUpperCase() + loaderType.slice(1);
-                                                        }
-
-                                                        const isActive = (v === (activeInstance?.selectedVersion || activeInstance?.version) || 
-                                                                          (v === activeInstance?.version && activeInstance?.selectedVersion?.startsWith(v + " (")));
-
-                                                        return (
-                                                            <div 
-                                                                key={v} 
-                                                                className={cn(
-                                                                    styles.versionCard,
-                                                                    isActive ? styles.versionCardActive : ""
-                                                                )}
-                                                            >
-                                                                <div className="flex items-center gap-5">
-                                                                    <div className={styles.versionIcon}>
-                                                                        <Box size={24} strokeWidth={1.5} />
-                                                                    </div>
-                                                                    <div className={styles.versionInfo}>
-                                                                        <span className={styles.versionTitle}>{mcVer}</span>
-                                                                        <div className={styles.versionMeta}>
-                                                                            <span className={cn(
-                                                                                styles.loaderPill,
-                                                                                loaderType === "Vanilla" ? styles.loaderPillVanilla : styles.loaderPillModded
-                                                                            )}>
-                                                                                {loaderType}
-                                                                            </span>
-                                                                            {loaderVer && (
-                                                                                <span className="text-xs text-[#71717a] font-mono">{loaderVer}</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="flex items-center gap-4">
-                                                                    {isActive && (
-                                                                        <div className={styles.activeBadge}>
-                                                                            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                                                            Activa
-                                                                        </div>
-                                                                    )}
-                                                                    
-                                                                    {(activeInstance?.versions || []).length > 1 && (
-                                                                        <button 
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleRemoveVersion(v);
-                                                                            }}
-                                                                            className={styles.deleteVersionBtn}
-                                                                            title="Eliminar versión"
-                                                                        >
-                                                                            <Trash2 size={18} />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </motion.div>
+                        <InstanceSettings 
+                            instance={activeInstance} 
+                            onBack={() => setShowSettingsModal(false)} 
+                        />
                     )}
                 </AnimatePresence>
 
-                {/* Background Selector Modal */}
-                <AnimatePresence>
-                    {showBackgroundSelector && (
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className={styles.bgSelectorOverlay}
-                        >
-                            <div className={styles.bgSelectorHeader}>
-                                <h3 className={styles.bgSelectorTitle}>
-                                    <ImageIcon size={28} className="text-[#ffbfba]" />
-                                    Seleccionar Fondo
-                                </h3>
-                                <button 
-                                    onClick={() => setShowBackgroundSelector(false)}
-                                    className={styles.bgSelectorClose}
-                                >
-                                    <X size={20} />
-                                    <span>Cerrar</span>
-                                </button>
-                            </div>
-                            
-                            <div className={styles.bgSelectorContent}>
-                                <div className={styles.bgSelectorGrid}>
-                                    {/* Upload Option */}
-                                    <div 
-                                        onClick={handleSelectCustomBackground}
-                                        className={styles.bgUploadOption}
-                                    >
-                                        <div className={styles.bgUploadIcon}>
-                                            <Upload size={24} />
-                                        </div>
-                                        <span className={styles.bgUploadText}>Subir Imagen</span>
-                                    </div>
 
-                                    {BACKGROUNDS.map((bg) => (
-                                        <div 
-                                            key={bg}
-                                            onClick={() => handleUpdateBackground(bg)}
-                                            className={cn(
-                                                styles.bgOption,
-                                                activeInstance?.backgroundImage === bg ? styles.bgOptionActive : ""
-                                            )}
-                                        >
-                                            <img 
-                                                src={`/assets/thumbnails/${bg}`} 
-                                                alt={bg}
-                                                className={styles.bgImage}
-                                                loading="lazy"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
                 {/* Create Instance Modal */}
                 <AnimatePresence key="modal2">
                     <CreateInstanceModal 
@@ -1890,57 +1201,7 @@ const Home: React.FC = () => {
                     />
                 </AnimatePresence>
 
-                {/* Delete Confirmation Modal */}
-                <AnimatePresence>
-                    {showDeleteConfirm && (
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-12"
-                        >
-                            <motion.div
-                                initial={{ scale: 0.9, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                exit={{ scale: 0.9, opacity: 0 }}
-                                className="bg-[#1a1a1a] w-full max-w-md rounded-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl"
-                            >
-                                <div className={cn("flex flex-col gap-8", styles.deleteConfirmContent)}>
-                                    <div className="text-center space-y-4">
-                                        <h3 className="text-2xl font-bold text-white">¿Eliminar Instancia?</h3>
-                                        <p className="text-[#a1a1aa] text-lg leading-relaxed">
-                                            Esta acción no se puede deshacer. Se eliminarán todos los datos de la instancia 
-                                            <span className="text-white font-bold"> {activeInstance?.name}</span>.
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="flex gap-4">
-                                        <button
-                                            onClick={() => setShowDeleteConfirm(false)}
-                                            className="flex-1 h-14 rounded-lg bg-[#27272a] text-white hover:bg-[#3f3f46] transition-colors font-medium"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            onClick={confirmDeleteInstance}
-                                            disabled={isDeleting}
-                                            className="flex-1 h-14 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
-                                        >
-                                            {isDeleting ? (
-                                                <>
-                                                    <div className="w-5 h-5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                                                    Eliminando...
-                                                </>
-                                            ) : (
-                                                "Eliminar"
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+
 
                 {/* Toast Notification */}
                 <AnimatePresence>

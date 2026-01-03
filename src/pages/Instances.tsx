@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle } from 'lucide-react';
+import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle, Settings } from 'lucide-react';
 import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 import styles from './Instances.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceDetails from '@/components/InstanceDetails';
+import InstanceSettings from '@/components/InstanceSettings';
 
 const BACKGROUNDS = [
     "1021170.png", "1102409.png", "1117616.jpg", "1117617.jpg", "1117618.jpg", "1117621.jpg", 
@@ -29,10 +30,11 @@ interface InstanceCardProps {
     onPlay: (e: React.MouseEvent, instance: Instance) => void;
     onDelete: (e: React.MouseEvent, id: string) => void;
     onUpdate: (id: string, updates: Partial<Instance>) => void;
+    onSettings: (e: React.MouseEvent, instance: Instance) => void;
     isLaunching: boolean;
 }
 
-const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, onPlay, onDelete, onUpdate, isLaunching }) => {
+const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, onPlay, onDelete, onUpdate, onSettings, isLaunching }) => {
     const [iconSrc, setIconSrc] = useState("https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
     const [bgSrc, setBgSrc] = useState<string>(`/assets/thumbnails/${BACKGROUNDS[0]}`);
     const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
@@ -268,6 +270,13 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                         Jugar
                     </button>
                     <button 
+                        className={styles.settingsButton}
+                        onClick={(e) => onSettings(e, instance)}
+                        title="Ajustes de Instancia"
+                    >
+                        <Settings size={16} />
+                    </button>
+                    <button 
                         className={styles.deleteButton}
                         onClick={(e) => onDelete(e, instance.id)}
                         title="Eliminar Instancia"
@@ -301,6 +310,7 @@ const Instances: React.FC = () => {
     const [showCreateModal, setShowCreateModal] = React.useState(false);
     const [searchTerm, setSearchTerm] = React.useState('');
     const [viewingInstance, setViewingInstance] = React.useState<Instance | null>(null);
+    const [viewingSettingsInstance, setViewingSettingsInstance] = React.useState<Instance | null>(null);
     const [toastMessage, setToastMessage] = React.useState<string | null>(null);
     const [toastType, setToastType] = React.useState<'success' | 'error'>('success');
 
@@ -492,6 +502,15 @@ const Instances: React.FC = () => {
         }
     };
 
+    if (viewingSettingsInstance) {
+        return (
+            <InstanceSettings 
+                instance={viewingSettingsInstance}
+                onBack={() => setViewingSettingsInstance(null)}
+            />
+        );
+    }
+
     if (viewingInstance) {
         return (
             <>
@@ -499,6 +518,7 @@ const Instances: React.FC = () => {
                     instance={viewingInstance} 
                     onBack={() => setViewingInstance(null)}
                     onPlay={handlePlayInstance}
+                    onOpenSettings={() => setViewingSettingsInstance(viewingInstance)}
                     isLaunching={isLaunching}
                 />
             </>
@@ -554,6 +574,10 @@ const Instances: React.FC = () => {
                             onPlay={handlePlayInstance}
                             onDelete={handleDeleteInstance}
                             onUpdate={updateInstance}
+                            onSettings={(e, inst) => {
+                                e.stopPropagation();
+                                setViewingSettingsInstance(inst);
+                            }}
                             isLaunching={isLaunching}
                         />
                     ))}

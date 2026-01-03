@@ -116,6 +116,34 @@ struct NeoForgeResponse {
 
 #[command]
 pub async fn get_neoforge_versions(minecraft_version: String) -> Result<Vec<LoaderVersion>, String> {
+    // Special handling for 1.20.1 (uses 'forge' artifact)
+    if minecraft_version == "1.20.1" {
+        let url = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/forge";
+        let response = reqwest::get(url).await.map_err(|e| e.to_string())?;
+        
+        if !response.status().is_success() {
+            return Ok(Vec::new());
+        }
+
+        let data: NeoForgeResponse = response.json().await.map_err(|e| e.to_string())?;
+        
+        let mut filtered_versions: Vec<LoaderVersion> = data.versions.into_iter()
+            .filter(|v| v.starts_with("1.20.1-"))
+            .map(|v| {
+                let stable = !v.contains("-beta");
+                LoaderVersion {
+                    id: format!("neoforge-{}", v),
+                    loader: "neoforge".to_string(),
+                    version: v,
+                    stable,
+                }
+            })
+            .collect();
+            
+        filtered_versions.sort_by(|a, b| compare_versions(&b.version, &a.version));
+        return Ok(filtered_versions);
+    }
+
     let url = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge";
     let response = reqwest::get(url).await.map_err(|e| e.to_string())?;
     

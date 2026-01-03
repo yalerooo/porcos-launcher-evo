@@ -690,7 +690,11 @@ impl MinecraftLauncher {
 
     async fn get_neoforge_profile(&self, _game_version: &str, loader_version: &str) -> Result<LoaderManifest, String> {
         // Construct installer URL
-        let url = format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{}/neoforge-{}-installer.jar", loader_version, loader_version);
+        let url = if loader_version.starts_with("1.20.1") {
+             format!("https://maven.neoforged.net/releases/net/neoforged/forge/{}/forge-{}-installer.jar", loader_version, loader_version)
+        } else {
+             format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{}/neoforge-{}-installer.jar", loader_version, loader_version)
+        };
         
         // Download to temp file
         let temp_dir = std::env::temp_dir();

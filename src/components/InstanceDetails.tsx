@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play, Folder, MoreHorizontal, ArrowLeft, Package, Map, Trash2, FileQuestion, Search, Download, Eye, X, FileText, Edit } from 'lucide-react';
+import { Play, Folder, ArrowLeft, Package, Map, Trash2, FileQuestion, Search, Download, Eye, X, FileText, Settings } from 'lucide-react';
 import { Instance, useLauncherStore } from '@/stores/launcherStore';
 import { cn } from '@/lib/utils';
 import { invoke } from '@tauri-apps/api/core';
@@ -23,6 +23,7 @@ interface InstanceDetailsProps {
     instance: Instance;
     onBack: () => void;
     onPlay: (e: React.MouseEvent, instance: Instance) => void;
+    onOpenSettings: () => void;
     isLaunching: boolean;
 }
 
@@ -166,8 +167,7 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
     );
 };
 
-const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onPlay, isLaunching }) => {
-    const { updateInstance, removeInstance } = useLauncherStore();
+const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onPlay, onOpenSettings, isLaunching }) => {
     const [activeTab, setActiveTab] = React.useState<Tab>('Content');
     const [files, setFiles] = React.useState<{name: string, is_dir: boolean}[]>([]);
     const [loadingFiles, setLoadingFiles] = React.useState(false);
@@ -178,60 +178,11 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
     const [consoleLogs, setConsoleLogs] = React.useState<string[]>([]);
     const consoleEndRef = React.useRef<HTMLDivElement>(null);
     
-    // Menu & Modals State
-    const [showMenu, setShowMenu] = React.useState(false);
-    const [showRenameModal, setShowRenameModal] = React.useState(false);
-    const [showDeleteModal, setShowDeleteModal] = React.useState(false);
-    const [newName, setNewName] = React.useState("");
-    const [isDeleting, setIsDeleting] = React.useState(false);
-    const menuRef = React.useRef<HTMLDivElement>(null);
-
     // Pagination & Search
     const [currentPage, setCurrentPage] = React.useState(1);
     const [searchQuery, setSearchQuery] = React.useState("");
-    const itemsPerPage = 20; // Increased from 8 to 20
+    const itemsPerPage = 20;
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
-
-    // Close menu when clicking outside
-    React.useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setShowMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
-    const handleRename = async () => {
-        if (!newName.trim()) return;
-        try {
-            await invoke('update_instance', { id: instance.id, name: newName });
-            updateInstance(instance.id, { name: newName });
-            setShowRenameModal(false);
-        } catch (error) {
-            console.error("Failed to rename instance:", error);
-        }
-    };
-
-    const handleDelete = async () => {
-        setIsDeleting(true);
-        try {
-            await invoke('delete_instance', { id: instance.id });
-            removeInstance(instance.id);
-            onBack();
-        } catch (error) {
-            console.error("Failed to delete instance:", error);
-            // We should probably show a toast here, but this component doesn't have toast state.
-            // For now, just log it. The user will see the modal not closing or the button spinning.
-            // Ideally we'd pass a toast handler or add local toast state.
-            alert(`Error al eliminar: ${error}`);
-        } finally {
-            setIsDeleting(false);
-        }
-    };
 
     React.useEffect(() => {
         if (scrollContainerRef.current) {
@@ -317,7 +268,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                     const fullPath = await join(instancePath, imgSource);
                     
                     const data = await invoke("read_binary_file", { path: fullPath }) as number[];
-                    const blob = new Blob([new Uint8Array(data)]);
+                    const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
                     src = URL.createObjectURL(blob);
                     objectUrl = src;
                 } catch (e) {
@@ -419,37 +370,9 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                         <button onClick={handleOpenFolder} className={styles.iconButton} title="Open Folder">
                             <Folder size={20} />
                         </button>
-                        <div className={styles.menuContainer} ref={menuRef}>
-                            <button className={styles.iconButton} onClick={() => setShowMenu(!showMenu)}>
-                                <MoreHorizontal size={20} />
-                            </button>
-                            
-                            {showMenu && (
-                                <div className={styles.menuDropdown}>
-                                    <button 
-                                        className={styles.menuItem}
-                                        onClick={() => {
-                                            setNewName(instance.name);
-                                            setShowRenameModal(true);
-                                            setShowMenu(false);
-                                        }}
-                                    >
-                                        <Edit className="w-4 h-4" />
-                                        Renombrar
-                                    </button>
-                                    <button 
-                                        className={`${styles.menuItem} ${styles.menuItemDelete}`}
-                                        onClick={() => {
-                                            setShowDeleteModal(true);
-                                            setShowMenu(false);
-                                        }}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                        Eliminar
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <button onClick={onOpenSettings} className={styles.iconButton} title="Ajustes de Instancia">
+                            <Settings size={20} />
+                        </button>
                     </div>
                 </div>
 
@@ -635,76 +558,6 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                 </div>
             )}
 
-            {showRenameModal && (
-                <div className={styles.modalOverlay}>
-                    <div className={styles.modalContent}>
-                        <div className={styles.modalHeader}>
-                            <h3 className={styles.modalTitle}>Renombrar Instancia</h3>
-                            <button className={styles.modalClose} onClick={() => setShowRenameModal(false)}>
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className={styles.modalBody}>
-                            <input 
-                                type="text" 
-                                value={newName}
-                                onChange={(e) => setNewName(e.target.value)}
-                                className={styles.modalInput}
-                                placeholder="Nuevo nombre"
-                                autoFocus
-                                onKeyDown={(e) => e.key === 'Enter' && handleRename()}
-                            />
-                        </div>
-                        <div className={styles.modalFooter}>
-                            <button className={`${styles.modalButton} ${styles.modalButtonCancel}`} onClick={() => setShowRenameModal(false)}>
-                                Cancelar
-                            </button>
-                            <button className={`${styles.modalButton} ${styles.modalButtonPrimary}`} onClick={handleRename}>
-                                Guardar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showDeleteModal && (
-                <div className={styles.modalOverlay}>
-                    <div className={styles.modalContent}>
-                        <div className={styles.modalHeader}>
-                            <h3 className={styles.modalTitle}>Eliminar Instancia</h3>
-                            <button className={styles.modalClose} onClick={() => setShowDeleteModal(false)}>
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <div className={styles.modalBody}>
-                            <p className={styles.modalText}>
-                                ¿Estás seguro de que quieres eliminar <strong>{instance.name}</strong>?
-                                <br />
-                                Esta acción no se puede deshacer y se perderán todos los datos de la instancia.
-                            </p>
-                        </div>
-                        <div className={styles.modalFooter}>
-                            <button className={`${styles.modalButton} ${styles.modalButtonCancel}`} onClick={() => setShowDeleteModal(false)}>
-                                Cancelar
-                            </button>
-                            <button 
-                                className={`${styles.modalButton} ${styles.modalButtonDanger} flex items-center justify-center gap-2`} 
-                                onClick={handleDelete}
-                                disabled={isDeleting}
-                            >
-                                {isDeleting ? (
-                                    <>
-                                        <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                                        Eliminando...
-                                    </>
-                                ) : (
-                                    "Eliminar"
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
