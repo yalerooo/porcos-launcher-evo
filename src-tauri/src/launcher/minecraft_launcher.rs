@@ -316,6 +316,17 @@ impl MinecraftLauncher {
             } else {
                 // Library without downloads section (Maven style)
                 let maven_url = library.url.as_deref().unwrap_or("https://libraries.minecraft.net/");
+                
+                // Fix for Maven Central blocking HTTP (501 Not Implemented)
+                let maven_url = if maven_url.starts_with("http://repo.maven.apache.org") {
+                    maven_url.replace("http://repo.maven.apache.org", "https://repo.maven.apache.org")
+                } else if maven_url.starts_with("http://") {
+                    // Upgrade other known repos to https if possible, or just try to use https generally
+                    maven_url.replace("http://", "https://") 
+                } else {
+                    maven_url.to_string()
+                };
+
                 let path = self.get_relative_library_path(&library.name);
                 let full_url = format!("{}{}", maven_url, path.to_string_lossy().replace("\\", "/"));
                 
@@ -377,7 +388,7 @@ impl MinecraftLauncher {
         let mut substitutions = std::collections::HashMap::new();
         substitutions.insert("${natives_directory}", natives_dir.to_string_lossy().to_string());
         substitutions.insert("${launcher_name}", "PorcosLauncher".to_string());
-        substitutions.insert("${launcher_version}", "0.1.3".to_string());
+        substitutions.insert("${launcher_version}", "0.1.4".to_string());
         substitutions.insert("${classpath}", classpath.clone());
         substitutions.insert("${library_directory}", libraries_dir.to_string_lossy().to_string());
         substitutions.insert("${classpath_separator}", if cfg!(windows) { ";" } else { ":" }.to_string());
@@ -1067,8 +1078,21 @@ public class ForgeInstaller {
     }
 
     async fn download_file(&self, url: &str, path: &std::path::Path) -> Result<(), String> {
+        // Fix for Maven Central and other repos blocking HTTP or needing HTTPS
+        let url = if url.starts_with("http://repo.maven.apache.org") {
+            url.replace("http://repo.maven.apache.org", "https://repo.maven.apache.org")
+        } else if url.starts_with("http://libraries.minecraft.net") {
+            url.replace("http://libraries.minecraft.net", "https://libraries.minecraft.net")
+        } else if url.starts_with("http://files.minecraftforge.net") {
+            url.replace("http://files.minecraftforge.net", "https://maven.minecraftforge.net")
+        } else if url.starts_with("http://maven.minecraftforge.net") {
+            url.replace("http://maven.minecraftforge.net", "https://maven.minecraftforge.net")
+        } else {
+            url.to_string()
+        };
+
         println!("[MinecraftLauncher] Downloading file: {}", url);
-        let response = self.http_client.get(url)
+        let response = self.http_client.get(&url)
             .send()
             .await
             .map_err(|e| format!("Download failed (network): {}", e))?;

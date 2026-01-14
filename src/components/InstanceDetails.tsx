@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Play, Folder, ArrowLeft, Package, Map, Trash2, FileQuestion, Search, Download, Eye, X, FileText, Settings } from 'lucide-react';
-import { Instance, useLauncherStore } from '@/stores/launcherStore';
+import { Instance } from '@/stores/launcherStore';
 import { cn } from '@/lib/utils';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';

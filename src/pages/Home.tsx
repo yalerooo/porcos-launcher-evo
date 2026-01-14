@@ -111,7 +111,7 @@ const Home: React.FC = () => {
         instances, selectedInstance, isLaunching, setIsLaunching, addLog, 
         memoryMin, memoryMax, setSelectedInstance, updateInstance,
         launchStage, launchProgress, setLaunchStage, setLaunchProgress,
-        removeInstance, versions, setVersions, setInstances,
+        versions, setVersions, setInstances,
         setLaunchStartTime
     } = useLauncherStore();
     const { user } = useAuthStore();
@@ -401,6 +401,46 @@ const Home: React.FC = () => {
 
                             } catch (e) {
                                 console.error("Failed to update wallpaper", e);
+                            }
+                        }
+
+                        // Update Icon if present
+                        if (update.icon) {
+                            try {
+                                setLaunchStage(`Actualizando icono...`);
+                                const iconUrl = update.icon;
+                                
+                                // Generate hash for filename
+                                let hash = 0;
+                                for (let i = 0; i < iconUrl.length; i++) {
+                                    hash = ((hash << 5) - hash) + iconUrl.charCodeAt(i);
+                                    hash |= 0;
+                                }
+                                const ext = iconUrl.split('.').pop()?.split('?')[0] || 'png';
+                                const iconFilename = `icon_${Math.abs(hash)}.${ext}`;
+                                
+                                // Get central icons directory
+                                const home = await homeDir();
+                                const iconsDir = await join(home, '.porcos', 'icons');
+                                const iconPath = await join(iconsDir, iconFilename);
+                                
+                                // Check if exists, if not download
+                                const exists = await invoke('file_exists', { path: iconPath }) as boolean;
+                                if (!exists) {
+                                    await invoke('download_file', { url: iconUrl, path: iconPath });
+                                }
+                                
+                                // Update instance config with ABSOLUTE path
+                                await invoke('update_instance', {
+                                    id: activeInstance.id,
+                                    icon: iconPath
+                                });
+                                
+                                // Update local store
+                                updateInstance(activeInstance.id, { icon: iconPath });
+
+                            } catch (e) {
+                                console.error("Failed to update icon", e);
                             }
                         }
                         

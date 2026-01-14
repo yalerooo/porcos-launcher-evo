@@ -13,14 +13,33 @@ struct DownloadProgress {
 }
 
 #[command]
-pub async fn fetch_cors(url: String, headers: Option<HashMap<String, String>>) -> Result<String, String> {
+pub async fn fetch_cors(
+    url: String, 
+    headers: Option<HashMap<String, String>>,
+    method: Option<String>,
+    body: Option<String>
+) -> Result<String, String> {
     let client = Client::new();
-    let mut request = client.get(&url);
+    let method_str = method.unwrap_or_else(|| "GET".to_string()).to_uppercase();
+    
+    let mut request = match method_str.as_str() {
+        "POST" => client.post(&url),
+        "PUT" => client.put(&url),
+        "DELETE" => client.delete(&url),
+        "PATCH" => client.patch(&url),
+        _ => client.get(&url),
+    };
 
     if let Some(h) = headers {
         for (key, value) in h {
             request = request.header(key, value);
         }
+    }
+
+    if let Some(b) = body {
+        request = request.body(b);
+        // If body is present and content-type not set, default to json? 
+        // Better to let caller set headers.
     }
 
     let response = request.send().await.map_err(|e| e.to_string())?;

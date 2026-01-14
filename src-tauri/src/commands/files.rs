@@ -2,6 +2,83 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use unrar::Archive;
+use sha1::{Sha1, Digest};
+
+// Murmur2 implementation for CurseForge
+fn compute_murmur2_hash(data: &[u8]) -> u32 {
+    let m: u32 = 0x5bd1e995;
+    let r: i32 = 24;
+    let seed: u32 = 1;
+    let mut len = data.len() as u32;
+    let mut h: u32 = seed ^ len;
+    let mut data_idx = 0;
+
+    while len >= 4 {
+        let mut k: u32 = u32::from(data[data_idx])
+            | (u32::from(data[data_idx + 1]) << 8)
+            | (u32::from(data[data_idx + 2]) << 16)
+            | (u32::from(data[data_idx + 3]) << 24);
+
+        k = k.wrapping_mul(m);
+        k ^= k >> r;
+        k = k.wrapping_mul(m);
+
+        h = h.wrapping_mul(m);
+        h ^= k;
+
+        data_idx += 4;
+        len -= 4;
+    }
+
+    match len {
+        3 => {
+            h ^= u32::from(data[data_idx + 2]) << 16;
+            h ^= u32::from(data[data_idx + 1]) << 8;
+            h ^= u32::from(data[data_idx]);
+            h = h.wrapping_mul(m);
+        }
+        2 => {
+            h ^= u32::from(data[data_idx + 1]) << 8;
+            h ^= u32::from(data[data_idx]);
+            h = h.wrapping_mul(m);
+        }
+        1 => {
+            h ^= u32::from(data[data_idx]);
+            h = h.wrapping_mul(m);
+        }
+        _ => {}
+    }
+
+    h ^= h >> 13;
+    h = h.wrapping_mul(m);
+    h ^= h >> 15;
+
+    h
+}
+
+// CurseForge normalization: filter out whitespace (9, 10, 13, 32)
+fn normalize_for_murmur2(data: &[u8]) -> Vec<u8> {
+    data.iter()
+        .filter(|&&b| b != 9 && b != 10 && b != 13 && b != 32)
+        .cloned()
+        .collect()
+}
+
+#[tauri::command]
+pub async fn get_file_hash(path: String) -> Result<String, String> {
+    let mut file = fs::File::open(&path).map_err(|e| e.to_string())?;
+    let mut hasher = Sha1::new();
+    io::copy(&mut file, &mut hasher).map_err(|e| e.to_string())?;
+    let hash = hasher.finalize();
+    Ok(format!("{:x}", hash))
+}
+
+#[tauri::command]
+pub async fn get_file_hash_murmur2(path: String) -> Result<u32, String> {
+    let data = fs::read(&path).map_err(|e| e.to_string())?;
+    let normalized = normalize_for_murmur2(&data);
+    Ok(compute_murmur2_hash(&normalized))
+}
 
 #[tauri::command]
 pub async fn extract_zip(zip_path: String, target_dir: String, skip_files: Option<Vec<String>>) -> Result<(), String> {

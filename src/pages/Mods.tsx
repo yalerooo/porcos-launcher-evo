@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Download, Loader2, Filter, Box, Package, ChevronDown, Plus, Gamepad2, Cpu, Check, RefreshCw } from 'lucide-react';
+import { Search, Download, Loader2, Filter, Box, Package, ChevronDown, Plus, Gamepad2, Cpu, Check, RefreshCw, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
@@ -194,6 +194,8 @@ const Mods: React.FC = () => {
     const [availableVersions, setAvailableVersions] = useState<any[]>([]);
     const currentDataRequestId = useRef(0);
     const currentUpdateRequestId = useRef(0);
+
+    const [verificationStatus, setVerificationStatus] = useState<string>('');
 
     useEffect(() => {
         const fetchVersions = async () => {
@@ -689,12 +691,21 @@ const Mods: React.FC = () => {
                 });
             }
 
-            const items = Array.from(grouped.values()).map((g: any) => ({
-                ...g,
-                downloads: "N/A",
+            const items = Array.from(grouped.values()).map((g: any) => {
                 // Sort versions descending
-                versions: g.versions.sort((a: any, b: any) => b.version.localeCompare(a.version, undefined, { numeric: true }))
-            }));
+                const sortedVersions = g.versions.sort((a: any, b: any) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+
+                // Use icon from latest version
+                const latestVersion = sortedVersions[0];
+                const latestIcon = latestVersion?.icon || g.icon;
+
+                return {
+                    ...g,
+                    icon: latestIcon,
+                    downloads: "N/A",
+                    versions: sortedVersions
+                };
+            });
 
             // Filter items
             const filteredItems = items.filter(item => {
@@ -1104,6 +1115,273 @@ const Mods: React.FC = () => {
         }
     };
 
+    const verifyDependencies = async () => {
+        if (!targetInstanceId) return;
+        setIsUpdatingAll(true);
+        setVerificationStatus('Iniciando verificación...');
+        
+        try {
+            const instancePath = await invoke('get_instance_path', { id: targetInstanceId }) as string;
+            const missingDeps = new Map<string, { id: string, source: ModSource }>();
+            
+            // 1. Build a comprehensive set of installed Project IDs
+            const installedProjectIds = new Set<string>();
+            for (const id of installedMods.keys()) {
+                installedProjectIds.add(id);
+            }
+
+            // 2. Resolve unknown mods via Hash (Batch)
+            setVerificationStatus('Analizando archivos...');
+            const hashesToResolve: string[] = [];
+            const hashToModId = new Map<string, string>();
+            
+            // New: Collect Murmur2 hashes for CurseForge cross-check
+            const murmurHashesToResolve: number[] = [];
+            const murmurToModId = new Map<number, string>();
+
+            // Calculate hashes locally
+            let processedHashes = 0;
+            const allMods = Array.from(installedMods.entries());
+            
+            for (const [id, mod] of allMods) {
+                try {
+                    const filePath = await join(instancePath, 'mods', mod.file);
+                    const exists = await invoke('file_exists', { path: filePath }) as boolean;
+                    if (exists) {
+                        // SHA1 for Modrinth
+                        if (!mod.versionId && mod.source !== 'curseforge') {
+                            const hash = await invoke('get_file_hash', { path: filePath }) as string;
+                            hashesToResolve.push(hash);
+                            hashToModId.set(hash, id);
+                        }
+
+                        // Murmur2 for CurseForge (Check ALL mods to find cross-platform deps)
+                        const murmur = await invoke('get_file_hash_murmur2', { path: filePath }) as number;
+                        murmurHashesToResolve.push(murmur);
+                        murmurToModId.set(murmur, id);
+                    }
+                } catch (e) {}
+                processedHashes++;
+                if (processedHashes % 5 === 0) setVerificationStatus(`Analizando archivos (${processedHashes}/${allMods.length})...`);
+            }
+
+            // Batch Query Modrinth for Hashes
+            if (hashesToResolve.length > 0) {
+                setVerificationStatus('Consultando API de Modrinth (Hashes)...');
+                // Split into chunks of 50 to be safe
+                const hashChunks = [];
+                for (let i = 0; i < hashesToResolve.length; i += 50) {
+                    hashChunks.push(hashesToResolve.slice(i, i + 50));
+                }
+
+                for (const chunk of hashChunks) {
+                    try {
+                        const responseText = await invoke('fetch_cors', { 
+                            url: 'https://api.modrinth.com/v2/version_files',
+                            method: 'POST',
+                            body: JSON.stringify({
+                                hashes: chunk,
+                                algorithm: 'sha1'
+                            }),
+                            headers: { 'Content-Type': 'application/json' }
+                        }) as string;
+                        
+                        const data = JSON.parse(responseText);
+                        // data is { "hash": { ...versionObj... } }
+                        
+                        for (const [hash, versionData] of Object.entries(data)) {
+                            const vData = versionData as any;
+                            const modId = hashToModId.get(hash);
+                            if (modId && vData.project_id) {
+                                installedProjectIds.add(vData.project_id);
+                                
+                                // Update local map
+                                const mod = installedMods.get(modId);
+                                if (mod) {
+                                    mod.versionId = vData.id;
+                                    mod.source = 'modrinth';
+                                    installedMods.set(modId, mod);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Batch hash lookup failed", e);
+                    }
+                }
+            }
+
+            // Batch Query CurseForge for Fingerprints (Murmur2)
+            const curseforgeChecks: { modId: string, fileId: string }[] = [];
+            
+            if (murmurHashesToResolve.length > 0) {
+                setVerificationStatus('Consultando API de CurseForge (Fingerprints)...');
+                const murmurChunks = [];
+                for (let i = 0; i < murmurHashesToResolve.length; i += 50) {
+                    murmurChunks.push(murmurHashesToResolve.slice(i, i + 50));
+                }
+
+                for (const chunk of murmurChunks) {
+                    try {
+                        const responseText = await invoke('fetch_cors', { 
+                            url: 'https://api.curseforge.com/v1/fingerprints',
+                            method: 'POST',
+                            body: JSON.stringify({
+                                fingerprints: chunk
+                            }),
+                            headers: {
+                                'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            }
+                        }) as string;
+                        
+                        const data = JSON.parse(responseText);
+                        // data.data.exactMatches = [{ id, file, file.id }]
+                        
+                        if (data.data && data.data.exactMatches) {
+                            for (const match of data.data.exactMatches) {
+                                // We found a match on CurseForge!
+                                // Even if it's a Modrinth mod, we now know its CF identity too.
+                                // Add to checks list so we verify its CF dependencies.
+                                curseforgeChecks.push({ modId: match.id.toString(), fileId: match.file.id.toString() });
+                                
+                                // Also add to installedProjectIds (CF ID) so we don't try to install it again if another mod requires it
+                                installedProjectIds.add(match.id.toString());
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Batch fingerprint lookup failed", e);
+                    }
+                }
+            }
+
+            // 3. Check Dependencies (Batch for Modrinth)
+            setVerificationStatus('Verificando dependencias...');
+            
+            // Collect all Modrinth Version IDs
+            const modrinthVersionIds: string[] = [];
+            // curseforgeChecks is already populated from fingerprints + existing known CF mods
+
+            installedMods.forEach((mod, id) => {
+                if (mod.versionId) {
+                    if (mod.source === 'modrinth') {
+                        modrinthVersionIds.push(mod.versionId);
+                    } else if (mod.source === 'curseforge') {
+                        // If we haven't already added it via fingerprint check (avoid dupes)
+                        if (!curseforgeChecks.some(c => c.modId === id && c.fileId === mod.versionId)) {
+                            curseforgeChecks.push({ modId: id, fileId: mod.versionId! });
+                        }
+                    }
+                }
+            });
+
+            // Batch fetch Modrinth versions
+            if (modrinthVersionIds.length > 0) {
+                setVerificationStatus(`Verificando ${modrinthVersionIds.length} mods de Modrinth...`);
+                const versionChunks = [];
+                for (let i = 0; i < modrinthVersionIds.length; i += 50) {
+                    versionChunks.push(modrinthVersionIds.slice(i, i + 50));
+                }
+
+                for (const chunk of versionChunks) {
+                    try {
+                        const url = `https://api.modrinth.com/v2/versions?ids=${encodeURIComponent(JSON.stringify(chunk))}`;
+                        const responseText = await invoke('fetch_cors', { url }) as string;
+                        const versionsData = JSON.parse(responseText); // Array of version objects
+
+                        for (const versionData of versionsData) {
+                            if (versionData.dependencies) {
+                                for (const dep of versionData.dependencies) {
+                                    if (dep.dependency_type === "required" && dep.project_id) {
+                                        if (!installedProjectIds.has(dep.project_id)) {
+                                            missingDeps.set(dep.project_id, { id: dep.project_id, source: 'modrinth' });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Batch version lookup failed", e);
+                    }
+                }
+            }
+
+            // Check CurseForge (Sequential/Chunked)
+            if (curseforgeChecks.length > 0) {
+                setVerificationStatus(`Verificando ${curseforgeChecks.length} mods de CurseForge...`);
+                let processedCF = 0;
+                
+                await processInChunks(curseforgeChecks, 5, async ({ modId, fileId }) => {
+                    try {
+                        const url = `https://api.curseforge.com/v1/mods/${modId}/files/${fileId}`;
+                        const responseText = await invoke('fetch_cors', { 
+                            url,
+                            headers: {
+                                'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
+                                'Accept': 'application/json'
+                            }
+                        }) as string;
+                        const data = JSON.parse(responseText);
+                        const fileData = data.data;
+
+                        if (fileData.dependencies) {
+                            for (const dep of fileData.dependencies) {
+                                if (dep.relationType === 3) { // Required
+                                    if (!installedMods.has(dep.modId.toString())) {
+                                        missingDeps.set(dep.modId.toString(), { id: dep.modId.toString(), source: 'curseforge' });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Failed to check CF deps for file ${fileId}`, e);
+                    }
+                    processedCF++;
+                    if (processedCF % 5 === 0) setVerificationStatus(`Verificando CurseForge (${processedCF}/${curseforgeChecks.length})...`);
+                });
+            }
+
+            setVerificationStatus('');
+
+            if (missingDeps.size > 0) {
+                const confirmInstall = confirm(`Se encontraron ${missingDeps.size} dependencias faltantes. ¿Deseas instalarlas ahora?`);
+                if (confirmInstall) {
+                    let installedCount = 0;
+                    const depsToInstall = Array.from(missingDeps.values());
+                    
+                    for (let i = 0; i < depsToInstall.length; i++) {
+                        const dep = depsToInstall[i];
+                        setVerificationStatus(`Instalando dependencia ${i + 1}/${depsToInstall.length}...`);
+                        try {
+                            if (dep.source === 'modrinth') {
+                                await installModrinth(dep.id, filterVersion, filterLoader, instancePath, new Set(), undefined, true);
+                            } else {
+                                await installCurseForge(dep.id, filterVersion, filterLoader, instancePath, new Set(), undefined, true);
+                            }
+                            installedCount++;
+                        } catch (e) {
+                            console.error(`Failed to install dependency ${dep.id}`, e);
+                        }
+                    }
+                    alert(`Se instalaron ${installedCount} dependencias.`);
+                    // Refresh list
+                    const currentId = targetInstanceId;
+                    setTargetInstanceId('');
+                    setTimeout(() => setTargetInstanceId(currentId), 50);
+                }
+            } else {
+                alert("Todas las dependencias parecen estar instaladas.");
+            }
+
+        } catch (e) {
+            console.error("Verification failed", e);
+            alert("Error al verificar dependencias.");
+        } finally {
+            setIsUpdatingAll(false);
+            setVerificationStatus('');
+        }
+    };
+
     const getTargetInstanceName = () => {
         return instances.find(i => i.id === targetInstanceId)?.name || "Seleccionar Instancia";
     };
@@ -1238,6 +1516,24 @@ const Mods: React.FC = () => {
                                     <RefreshCw size={14} />
                                 )}
                                 {isUpdatingAll ? 'Actualizando...' : `Actualizar Todo (${items.filter(item => updatesAvailable.get(item.id)).length})`}
+                            </button>
+                        )}
+
+                        {/* Verify Dependencies Button */}
+                        {searchType === 'mods' && (
+                            <button 
+                                onClick={verifyDependencies}
+                                disabled={isUpdatingAll}
+                                className={styles.updateAllButton}
+                                title="Verificar y reparar dependencias"
+                                style={{ minWidth: '180px' }}
+                            >
+                                {isUpdatingAll ? (
+                                    <Loader2 className="animate-spin" size={14} />
+                                ) : (
+                                    <ShieldCheck size={14} />
+                                )}
+                                {verificationStatus ? verificationStatus : (isUpdatingAll ? 'Ocupado...' : 'Verificar Dependencias')}
                             </button>
                         )}
                     </div>

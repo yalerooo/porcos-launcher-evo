@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, Settings, Plus, Image as ImageIcon, X, Trash2, Check, Play, Cpu, Gamepad2, ChevronDown, ArrowLeft, Package, Download, AlertCircle, Upload } from 'lucide-react';
+import { Box, Settings, Plus, Image as ImageIcon, X, Trash2, Check, ChevronDown, ArrowLeft, AlertCircle, Upload } from 'lucide-react';
 import { Instance, useLauncherStore } from '@/stores/launcherStore';
 import { cn } from '@/lib/utils';
 import { invoke } from '@tauri-apps/api/core';

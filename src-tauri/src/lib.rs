@@ -55,6 +55,8 @@ pub fn run() {
             commands::files::rename_file,
             commands::files::remove_dir,
             commands::files::merge_dir,
+            commands::files::get_file_hash,
+            commands::files::get_file_hash_murmur2,
             set_complete
         ])
         .setup(|app| {
