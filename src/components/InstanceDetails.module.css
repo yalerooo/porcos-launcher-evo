@@ -550,7 +550,10 @@
 /* Modals */
 .modalOverlay {
     position: fixed;
-    inset: 0;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    left: 65px;
     z-index: 200;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(8px);
@@ -558,6 +561,7 @@
     align-items: center;
     justify-content: center;
     padding: 2rem;
+    border-top-left-radius: 30px;
 }
 
 .modalContent {
@@ -690,7 +694,10 @@
 /* Image Modal */
 .imageModal {
     position: fixed;
-    inset: 0;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    left: 65px;
     z-index: 300;
     background: rgba(0, 0, 0, 0.95);
     display: flex;
@@ -698,6 +705,7 @@
     justify-content: center;
     padding: 2rem;
     animation: fadeIn 0.2s ease-out;
+    border-top-left-radius: 30px;
 }
 
 .modalImage {
@@ -734,7 +742,10 @@
 /* Log Modal */
 .logModal {
     position: fixed;
-    inset: 0;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    left: 65px;
     z-index: 300;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(4px);
@@ -742,6 +753,7 @@
     align-items: center;
     justify-content: center;
     padding: 2rem;
+    border-top-left-radius: 30px;
 }
 
 .logContent {

@@ -601,6 +601,7 @@ const Instances: React.FC = () => {
                         exit={{ opacity: 0 }}
                         className={styles.modalOverlay}
                         onClick={() => setInstanceToDelete(null)}
+                        data-modal-overlay="true"
                     >
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}

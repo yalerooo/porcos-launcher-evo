@@ -297,6 +297,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className={styles.overlay}
+                    data-modal-overlay="true"
                 >
                     <motion.div
                         initial={{ scale: 0.95, opacity: 0, y: 20 }}

@@ -329,7 +329,7 @@ export default function MainLayout({
 
       {/* Global Crash Report Modal */}
       {crashReport && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8" onClick={() => setCrashReport(null)}>
+        <div className="fixed top-[56px] right-0 bottom-0 left-[65px] z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8 rounded-tl-[30px]" onClick={() => setCrashReport(null)} data-modal-overlay="true">
             <div className="w-full max-w-5xl h-[80vh] bg-[#18181b] border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-[#202023]">
                     <div className="flex items-center gap-2 text-red-400">

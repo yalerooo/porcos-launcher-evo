@@ -51,6 +51,8 @@ pub fn run() {
             commands::files::get_mod_icon,
             commands::files::get_mod_metadata,
             commands::files::run_installer,
+            commands::files::run_installer_with_args,
+            commands::files::run_update_installer,
             commands::files::move_file,
             commands::files::rename_file,
             commands::files::remove_dir,

@@ -21,7 +21,7 @@ const ModInstallSuccessModal: React.FC<ModInstallSuccessModalProps> = ({ isOpen,
     if (!isOpen) return null;
 
     return (
-        <div className={styles.overlay}>
+        <div className={styles.overlay} data-modal-overlay="true">
             <motion.div 
                 initial={{ scale: 0.95, opacity: 0, y: 10 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}

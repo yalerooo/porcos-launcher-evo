@@ -534,7 +534,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
             </div>
 
             {selectedScreenshot && (
-                <div className={styles.imageModal} onClick={() => setSelectedScreenshot(null)}>
+                <div className={styles.imageModal} onClick={() => setSelectedScreenshot(null)} data-modal-overlay="true">
                     <button className={styles.closeModalButton} onClick={() => setSelectedScreenshot(null)}>
                         <X className="w-6 h-6" />
                     </button>
@@ -543,7 +543,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
             )}
 
             {selectedLog && (
-                <div className={styles.logModal} onClick={() => setSelectedLog(null)}>
+                <div className={styles.logModal} onClick={() => setSelectedLog(null)} data-modal-overlay="true">
                     <div className={styles.logContent} onClick={(e) => e.stopPropagation()}>
                         <div className={styles.logHeader}>
                             <h3 className={styles.logTitle}>{selectedLog.name}</h3>

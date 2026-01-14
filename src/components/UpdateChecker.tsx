@@ -95,10 +95,16 @@ const UpdateChecker: React.FC = () => {
             if (unlisten) unlisten();
             setDownloadProgress(100);
 
-            // Run the installer
-            await invoke('run_installer', { path: filePath });
+            // Run the installer silently and relaunch via backend script
+            try {
+                await invoke('run_update_installer', { installerPath: filePath });
+            } catch (e) {
+                // Fallback to normal installer if something fails
+                console.warn("Update script failed, trying normal", e);
+                await invoke('run_installer', { path: filePath });
+            }
             
-            // Close the app
+            // Close the app immediately
             await exit(0);
 
         } catch (e) {
@@ -118,6 +124,7 @@ const UpdateChecker: React.FC = () => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className={styles.overlay}
+                data-modal-overlay="true"
             >
                 <motion.div
                     initial={{ scale: 0.95, opacity: 0, y: 20 }}

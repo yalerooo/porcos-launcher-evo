@@ -1184,7 +1184,7 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
     if (!isOpen) return null;
 
     return (
-        <div className={styles.overlay}>
+        <div className={styles.overlay} data-modal-overlay="true">
             <motion.div 
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}

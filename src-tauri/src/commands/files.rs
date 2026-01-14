@@ -332,6 +332,58 @@ pub async fn run_installer(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn run_installer_with_args(path: String, args: Vec<String>) -> Result<(), String> {
+    let mut command = std::process::Command::new(path);
+    command.args(args);
+    
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW = 0x08000000
+        // DETACHED_PROCESS = 0x00000008
+        command.creation_flags(0x08000000);
+    }
+
+    command.spawn()
+        .map_err(|e| e.to_string())?;
+        
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn run_update_installer(installer_path: String) -> Result<(), String> {
+    let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe_path_str = current_exe.to_str().ok_or("Invalid path")?.to_string();
+    let temp_dir = std::env::temp_dir();
+    let bat_path = temp_dir.join("porcos_update.bat");
+
+    // Use a temporary batch file to avoid escaping issues with cmd /C
+    // The script waits 3s, runs installer silently, then relaunches the app
+    // DEL "%~f0" deletes the script itself after execution
+    let script_content = format!(
+        "@echo off\r\ntimeout /t 3 /nobreak >nul\r\nstart /wait \"\" \"{}\" /S\r\nstart \"\" \"{}\"\r\n(goto) 2>nul & del \"%~f0\"",
+        installer_path,
+        exe_path_str
+    );
+
+    std::fs::write(&bat_path, script_content).map_err(|e| e.to_string())?;
+
+    let mut command = std::process::Command::new("cmd");
+    command.args(&["/C", bat_path.to_str().ok_or("Invalid bat path")?]);
+    
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW to hide the cmd window
+        command.creation_flags(0x08000000);
+    }
+
+    command.spawn().map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn move_file(source: String, target: String) -> Result<(), String> {
     fs::rename(source, target).map_err(|e| e.to_string())
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Settings, Plus, Check, Play, Cpu, Gamepad2, ChevronDown, Package, Download, AlertCircle } from 'lucide-react';
+import { Box, Settings, Plus, Check, Play, Gamepad2, ChevronDown, Package, Download, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -1138,30 +1138,15 @@ const Home: React.FC = () => {
                                         )}
                                     </AnimatePresence>
                                  </div>
-                                 
-                                 <div className={styles.metaDivider} />
 
-                                 {/* Modloader Pill */}
-                                 <div className={styles.metaPill}>
-                                    <Cpu size={16} className={activeInstance?.modLoader ? "text-[#ffbfba]" : "text-blue-400"} />
-                                    <span className={styles.metaText}>
-                                        {activeInstance?.modLoader 
-                                            ? (activeInstance.modLoader.charAt(0).toUpperCase() + activeInstance.modLoader.slice(1)) 
-                                            : "Vanilla"}
-                                    </span>
-                                 </div>
-
-                                 {/* Porcos Version Pill */}
+                                 {/* Porcos Version Pill - Only show for Porcos modpacks */}
                                  {porcosMetadata && (
-                                     <>
-                                        <div className={styles.metaDivider} />
-                                        <div className={styles.metaPill}>
-                                            <Package size={16} className="text-[#ffbfba]" />
-                                            <span className={styles.metaText}>
-                                                v{porcosMetadata.version}
-                                            </span>
-                                        </div>
-                                     </>
+                                    <div className={styles.metaPill}>
+                                        <Package size={16} className="text-[#ffbfba]" />
+                                        <span className={styles.metaText}>
+                                            v{porcosMetadata.version}
+                                        </span>
+                                    </div>
                                  )}
 
                                  {/* Update Button */}

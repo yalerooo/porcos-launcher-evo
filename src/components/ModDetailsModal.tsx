@@ -90,7 +90,7 @@ const ModDetailsModal: React.FC<ModDetailsModalProps> = ({
     if (!isOpen || !item) return null;
 
     return (
-        <div className={styles.overlay} onClick={onClose}>
+        <div className={styles.overlay} onClick={onClose} data-modal-overlay="true">
             <motion.div 
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
