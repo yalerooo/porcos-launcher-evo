@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { join } from '@tauri-apps/api/path';
+import { useI18n } from '@/i18n';
 import styles from './InstanceDetails.module.css';
 
 interface InstanceDetailsProps {
@@ -64,6 +65,7 @@ const ScreenshotItem = ({ file, instancePath, onDelete, onClick }: { file: {name
 };
 
 const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {name: string, is_dir: boolean}, instancePath: string, activeTab: string, onDelete: (name: string) => void, onClick?: (file: {name: string}) => void }) => {
+    const { t } = useI18n();
     const [iconUrl, setIconUrl] = React.useState<string | null>(null);
 
     React.useEffect(() => {
@@ -150,13 +152,14 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
                 className={styles.deleteButton}
             >
                 <Trash2 className="w-4 h-4" />
-                Eliminar
+                {t('delete')}
             </button>
         </div>
     );
 };
 
 const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onPlay, onOpenSettings, isLaunching }) => {
+    const { t } = useI18n();
     // Get cached images from global store
     const cached = getCachedImages(instance.id);
     const [activeTab, setActiveTab] = React.useState<Tab>('Content');
@@ -357,7 +360,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                 </span>
                             )}
                             <span className={cn(styles.tag, styles.tagSecondary)}>
-                                {files.length} Files
+                                {files.length} {t('files')}
                             </span>
                         </div>
                     </div>
@@ -367,23 +370,26 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                         disabled={isLaunching}
                     >
                         <Play size={20} fill="currentColor" />
-                        {isLaunching ? 'Launching...' : 'Play Now'}
+                        {isLaunching ? t('launching') : t('playNow')}
                     </button>
                 </div>
             </div>
 
             {/* Tabs */}
             <div className={styles.tabsContainer}>
-                {tabs.map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={cn(styles.tabButton, activeTab === tab && styles.tabButtonActive)}
-                    >
-                        {tab}
-                        {activeTab === tab && <motion.div layoutId="activeTab" className={styles.tabIndicator} />}
-                    </button>
-                ))}
+                {tabs.map(tab => {
+                    const tabKey = tab.toLowerCase() as 'content' | 'logs' | 'saves' | 'screenshots' | 'console';
+                    return (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={cn(styles.tabButton, activeTab === tab && styles.tabButtonActive)}
+                        >
+                            {t(tabKey)}
+                            {activeTab === tab && <motion.div layoutId="activeTab" className={styles.tabIndicator} />}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Content Area */}
@@ -396,7 +402,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                 <Search className="w-5 h-5 text-zinc-500" />
                                 <input 
                                     type="text" 
-                                    placeholder={`Buscar en ${activeTab === 'Content' ? 'mods' : (activeTab === 'Saves' ? 'saves' : 'screenshots')}...`}
+                                    placeholder={activeTab === 'Content' ? t('searchInMods') : (activeTab === 'Saves' ? t('searchInWorlds') : (activeTab === 'Screenshots' ? t('searchInScreenshots') : t('searchInLogs')))}
                                     value={searchQuery}
                                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                     className={styles.searchInput}
@@ -408,7 +414,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                             <div className={styles.loadingContainer}>
                                 <div className="flex flex-col items-center gap-2">
                                     <div className="w-6 h-6 border-2 border-[#ffbfba] border-t-transparent rounded-full animate-spin" />
-                                    <span>Cargando...</span>
+                                    <span>{t('loading')}</span>
                                 </div>
                             </div>
                         ) : filteredFiles.length === 0 ? (
@@ -417,10 +423,10 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                     {activeTab === 'Content' ? <Package className="w-8 h-8 opacity-50" /> : (activeTab === 'Saves' ? <Map className="w-8 h-8 opacity-50" /> : <Eye className="w-8 h-8 opacity-50" />)}
                                 </div>
                                 <p className="text-lg font-medium">
-                                    {searchQuery ? 'No se encontraron resultados' : `No se encontraron ${activeTab === 'Content' ? 'mods' : (activeTab === 'Saves' ? 'partidas' : 'capturas')}`}
+                                    {searchQuery ? t('noResultsFound') : (activeTab === 'Content' ? t('noMods') : (activeTab === 'Saves' ? t('noSaves') : t('noScreenshots')))}
                                 </p>
                                 <p className="text-sm opacity-60">
-                                    {searchQuery ? 'Intenta con otra búsqueda' : 'La carpeta está vacía'}
+                                    {searchQuery ? t('tryAnotherSearch') : t('folderEmpty')}
                                 </p>
                             </div>
                         ) : activeTab === 'Screenshots' ? (
@@ -458,17 +464,17 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                     disabled={currentPage === 1}
                                     className={styles.pageButton}
                                 >
-                                    Anterior
+                                    {t('previous')}
                                 </button>
                                 <span className={styles.pageInfo}>
-                                    Página {currentPage} de {totalPages}
+                                    {t('pageOf', { current: currentPage, total: totalPages })}
                                 </span>
                                 <button
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                     disabled={currentPage === totalPages}
                                     className={styles.pageButton}
                                 >
-                                    Siguiente
+                                    {t('nextPage')}
                                 </button>
                             </div>
                         )}

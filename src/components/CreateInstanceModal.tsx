@@ -5,6 +5,7 @@ import { useLauncherStore, Instance } from '@/stores/launcherStore';
 import { cn } from '@/lib/utils';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
+import { useI18n } from '@/i18n';
 import styles from './CreateInstanceModal.module.css';
 
 const BACKGROUNDS = [
@@ -43,6 +44,7 @@ interface CreateInstanceModalProps {
 }
 
 const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClose }) => {
+    const { t } = useI18n();
     const { 
         addInstance, 
         versions, 
@@ -309,8 +311,8 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                         {/* Header */}
                         <div className={styles.header}>
                             <div>
-                                <h3 className={styles.title}>Nueva Instancia</h3>
-                                <p className={styles.subtitle}>Configura tu nueva aventura de Minecraft</p>
+                                <h3 className={styles.title}>{t('newInstance')}</h3>
+                                <p className={styles.subtitle}>{t('newInstanceDesc')}</p>
                             </div>
                             <button 
                                 onClick={onClose}
@@ -325,14 +327,14 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                             <div className={styles.formGroup}>
                                 <label className={styles.label}>
                                     <Type size={16} />
-                                    Nombre de la Instancia
+                                    {t('instanceNameLabel')}
                                 </label>
                                 <div className={styles.inputWrapper}>
                                     <input
                                         type="text"
                                         value={newInstanceName}
                                         onChange={(e) => setNewInstanceName(e.target.value)}
-                                        placeholder="Ej: Mi Mundo Survival 1.21"
+                                        placeholder={t('instanceNameExample')}
                                         className={styles.input}
                                         autoFocus
                                     />
@@ -345,7 +347,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                 <div className={styles.formGroup}>
                                     <label className={styles.label}>
                                         <Hash size={16} />
-                                        Versión de Minecraft
+                                        {t('minecraftVersion')}
                                     </label>
                                     <div className={styles.inputWrapper}>
                                         <div 
@@ -356,7 +358,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                             )}
                                         >
                                             <span className="truncate font-medium">
-                                                {newInstanceVersion || 'Seleccionar versión'}
+                                                {newInstanceVersion || t('selectVersionPlaceholder')}
                                             </span>
                                             <ChevronDown size={20} className={cn(styles.chevron, isVersionDropdownOpen ? styles.chevronRotated : "")} />
                                         </div>
@@ -376,7 +378,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                                                 <Search size={16} className={styles.searchIcon} />
                                                                 <input 
                                                                     type="text" 
-                                                                    placeholder="Buscar versión..." 
+                                                                    placeholder={t('searchVersion')} 
                                                                     className={styles.searchInput}
                                                                     value={versionSearch}
                                                                     onChange={(e) => setVersionSearch(e.target.value)}
@@ -481,7 +483,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                     >
                                         <label className={styles.label}>
                                             <Gamepad2 size={16} />
-                                            Versión del Loader
+                                            {t('loaderVersion')}
                                         </label>
                                         <div className={styles.inputWrapper}>
                                             <div 
@@ -492,7 +494,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                                 )}
                                             >
                                                 <span className="truncate font-medium">
-                                                    {modLoaderVersion || 'Select Version'}
+                                                    {modLoaderVersion || t('selectVersionPlaceholder')}
                                                 </span>
                                                 <ChevronDown size={20} className={cn(styles.chevron, isModLoaderVersionDropdownOpen ? styles.chevronRotated : "")} />
                                             </div>
@@ -530,7 +532,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                                                 ))}
                                                                 {availableModLoaderVersions.length === 0 && (
                                                                     <div className="px-4 py-8 text-center text-white/30 text-sm">
-                                                                        No se encontraron versiones compatibles
+                                                                        {t('noCompatibleVersions')}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -547,7 +549,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                             <div className={styles.formGroup}>
                                 <label className={styles.label}>
                                     <Upload size={16} />
-                                    Icono de la Instancia
+                                    {t('instanceIconLabel')}
                                 </label>
                                 <div className={styles.iconGrid}>
                                     {/* Upload Option */}
@@ -558,7 +560,7 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                             styles.uploadItem,
                                             selectedImage ? styles.iconItemSelected : ""
                                         )}
-                                        title="Subir imagen personalizada"
+                                        title={t('uploadCustomImage')}
                                     >
                                         {selectedImage ? (
                                             <img src={previewImage!} className={styles.uploadImage} />
@@ -594,14 +596,14 @@ const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({ isOpen, onClo
                                     onClick={onClose}
                                     className={styles.cancelButton}
                                 >
-                                    Cancelar
+                                    {t('cancel')}
                                 </button>
                                 <button
                                     onClick={handleCreateInstance}
                                     disabled={!newInstanceName || !newInstanceVersion || isCreating}
                                     className={styles.createButton}
                                 >
-                                    {isCreating ? <Loader2 className={styles.loader} /> : "Crear Instancia"}
+                                    {isCreating ? <Loader2 className={styles.loader} /> : t('createInstance')}
                                 </button>
                             </div>
                         </div>

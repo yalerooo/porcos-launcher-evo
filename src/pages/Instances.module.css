@@ -8,70 +8,122 @@
     position: relative;
 }
 
-/* Background decoration removed for solid look */
+/* Subtle ambient glow */
 .container::before {
-    display: none;
+    content: '';
+    position: absolute;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(255, 191, 186, 0.03) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.container::after {
+    content: '';
+    position: absolute;
+    bottom: -300px;
+    left: -200px;
+    width: 700px;
+    height: 700px;
+    background: radial-gradient(circle, rgba(255, 191, 186, 0.02) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
 }
 
 .header {
-    padding: 2rem 3rem;
+    padding: 2rem 2.5rem 1.5rem 2.5rem;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-end;
     z-index: 10;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
 }
 
 .titleSection {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.25rem;
 }
 
 .title {
-    font-size: 2rem;
-    font-weight: 800;
+    font-size: 1.75rem;
+    font-weight: 700;
     color: white;
     margin: 0;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
 }
 
 .subtitle {
-    color: #a1a1aa;
-    font-size: 0.9rem;
+    color: #71717a;
+    font-size: 0.85rem;
     margin: 0;
+    font-weight: 400;
+}
+
+.countBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 0.5rem;
+    background: linear-gradient(135deg, rgba(255, 191, 186, 0.15) 0%, rgba(255, 191, 186, 0.08) 100%);
+    border: 1px solid rgba(255, 191, 186, 0.2);
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ffbfba;
+    letter-spacing: 0;
 }
 
 .searchWrapper {
     position: relative;
-    width: 300px;
+    width: 280px;
 }
 
 .searchIcon {
     position: absolute;
-    left: 1rem;
+    left: 0.875rem;
     top: 50%;
     transform: translateY(-50%);
-    color: #71717a;
+    color: #52525b;
     transition: color 0.2s;
 }
 
 .searchInput {
     width: 100%;
-    background-color: #18181b;
-    border: 1px solid #27272a;
-    padding: 0.75rem 1rem 0.75rem 2.75rem;
-    border-radius: 1rem;
+    background-color: rgba(24, 24, 27, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0.625rem 1rem 0.625rem 2.5rem;
+    border-radius: 0.75rem;
     color: white;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     outline: none;
-    transition: all 0.2s;
-    corner-shape: squircle;
+    transition: all 0.25s ease;
+}
+
+.searchInput::placeholder {
+    color: #52525b;
+}
+
+.searchInput:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(24, 24, 27, 0.8);
 }
 
 .searchInput:focus {
-    border-color: #ffbfba;
-    background-color: #27272a;
-    box-shadow: 0 0 0 4px rgba(255, 191, 186, 0.1);
+    border-color: rgba(255, 191, 186, 0.4);
+    background-color: rgba(24, 24, 27, 0.9);
+    box-shadow: 0 0 0 3px rgba(255, 191, 186, 0.08), 0 0 20px rgba(255, 191, 186, 0.05);
 }
 
 .searchInput:focus + .searchIcon {
@@ -81,123 +133,188 @@
 .content {
     flex: 1;
     overflow-y: auto;
-    padding: 0 3rem 3rem 3rem;
+    padding: 1.5rem 2.5rem 2.5rem 2.5rem;
     z-index: 10;
+}
+
+/* Custom scrollbar */
+.content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
     padding-bottom: 2rem;
 }
 
 /* Card Styles */
 .card {
-    background-color: #18181b;
-    border: 1px solid #27272a;
-    border-radius: 1.5rem;
+    background: linear-gradient(145deg, rgba(30, 30, 35, 0.8) 0%, rgba(20, 20, 25, 0.9) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 1.25rem;
     position: relative;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
-    height: 340px;
+    height: 320px;
     cursor: pointer;
-    overflow: visible;
-    corner-shape: squircle;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
 }
 
 .card:hover {
-    transform: translateY(-6px);
-    border-color: #3f3f46;
-    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+    transform: translateY(-4px) scale(1.01);
+    border-color: rgba(255, 191, 186, 0.2);
+    box-shadow: 
+        0 20px 40px -15px rgba(0, 0, 0, 0.6),
+        0 0 30px -10px rgba(255, 191, 186, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
     z-index: 20;
 }
 
+.card:hover::before {
+    opacity: 1;
+    background: linear-gradient(90deg, transparent, rgba(255, 191, 186, 0.3), transparent);
+}
+
 .cardImageArea {
-    height: 180px;
+    height: 160px;
     width: 100%;
     position: relative;
     overflow: hidden;
-    border-top-left-radius: 1.5rem;
-    border-top-right-radius: 1.5rem;
 }
 
 .cardBg {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s;
+    filter: brightness(0.9) saturate(1.1);
 }
 
 .card:hover .cardBg {
-    transform: scale(1.1);
+    transform: scale(1.08);
+    filter: brightness(1) saturate(1.2);
 }
 
 .cardOverlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to bottom, transparent 0%, rgba(24, 24, 27, 0.8) 80%, #18181b 100%);
+    background: linear-gradient(
+        to bottom, 
+        transparent 0%, 
+        rgba(15, 15, 18, 0.4) 50%,
+        rgba(15, 15, 18, 0.9) 85%, 
+        rgba(15, 15, 18, 1) 100%
+    );
 }
 
 .cardBody {
-    padding: 1.5rem;
+    padding: 1rem 1.25rem 1.25rem 1.25rem;
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    position: relative;
 }
 
 .cardHeader {
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
+    align-items: flex-start;
+    gap: 0.875rem;
     position: relative;
 }
 
 .cardIcon {
     position: relative;
-    top: auto;
-    left: auto;
-    width: 72px;
-    height: 72px;
-    border-radius: 1.25rem;
-    background-color: #27272a;
-    border: 4px solid #18181b;
+    width: 56px;
+    height: 56px;
+    border-radius: 0.875rem;
+    background: linear-gradient(145deg, #27272a, #1f1f22);
+    border: 2px solid rgba(255, 255, 255, 0.08);
     overflow: hidden;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    box-shadow: 
+        0 8px 16px -4px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
     z-index: 2;
-    transition: transform 0.3s ease;
-    margin-top: -36px;
+    transition: all 0.3s ease;
+    margin-top: -32px;
     flex-shrink: 0;
+}
+
+.cardIcon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.card:hover .cardIcon {
+    transform: scale(1.05);
+    border-color: rgba(255, 191, 186, 0.3);
+    box-shadow: 
+        0 10px 20px -4px rgba(0, 0, 0, 0.6),
+        0 0 20px -5px rgba(255, 191, 186, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .cardInfo {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding-top: 0;
+    gap: 0.375rem;
+    padding-top: 0.25rem;
     min-width: 0;
     flex: 1;
 }
 
 .cardTitle {
-    font-size: 1.25rem;
-    font-weight: 800;
+    font-size: 1.1rem;
+    font-weight: 700;
     color: white;
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     letter-spacing: -0.02em;
+    transition: color 0.2s;
+}
+
+.card:hover .cardTitle {
+    color: #ffbfba;
 }
 
 .cardMeta {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
+    gap: 0.375rem;
+    font-size: 0.75rem;
     color: #a1a1aa;
     flex-wrap: wrap;
 }
@@ -205,29 +322,31 @@
 .loaderBadge {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
-    background-color: #27272a;
-    padding: 0.2rem 0.6rem;
-    border-radius: 0.5rem;
-    font-weight: 600;
-    border: 1px solid #3f3f46;
+    gap: 0.25rem;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     transition: all 0.2s;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
+    color: #a1a1aa;
 }
 
 .loaderBadge:hover {
-    background-color: #3f3f46;
-    border-color: #52525b;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
     color: white;
 }
 
 .cardFooter {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-top: 1rem;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 0.75rem;
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -237,44 +356,55 @@
 }
 
 .playButton {
-    background-color: #ffbfba;
-    color: #09090b;
+    background: linear-gradient(135deg, #ffbfba 0%, #ffd4d1 100%);
+    color: #0f0f0f;
     border: none;
-    padding: 0 1.5rem;
-    height: 44px;
-    border-radius: 0.75rem;
-    font-weight: 800;
-    font-size: 0.9rem;
+    padding: 0 1.25rem;
+    height: 38px;
+    border-radius: 0.625rem;
+    font-weight: 700;
+    font-size: 0.8rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     flex: 1;
     justify-content: center;
-    margin-right: 1rem;
+    box-shadow: 0 2px 8px rgba(255, 191, 186, 0.2);
 }
 
 .playButton:hover {
-    background-color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 191, 186, 0.3);
+    background: linear-gradient(135deg, #ffd4d1 0%, #fff 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(255, 191, 186, 0.35);
+}
+
+.playButton:active {
+    transform: translateY(0);
 }
 
 .deleteButton {
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.15);
     color: #f87171;
-    width: 44px;
-    height: 44px;
-    border-radius: 0.75rem;
+    width: 38px;
+    height: 38px;
+    border-radius: 0.625rem;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.deleteButton:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
 }
 
 .versionDropdown {
@@ -325,51 +455,72 @@
 
 /* Create Card */
 .createCard {
-    background-color: #18181b;
-    border: 2px dashed #27272a;
-    border-radius: 1.5rem;
+    background: linear-gradient(145deg, rgba(30, 30, 35, 0.5) 0%, rgba(20, 20, 25, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 2px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 1.25rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1.5rem;
+    gap: 1.25rem;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    height: 340px;
-    color: #71717a;
-    corner-shape: squircle;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 320px;
+    color: #52525b;
+    position: relative;
+    overflow: hidden;
+}
+
+.createCard::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(255, 191, 186, 0) 0%, transparent 70%);
+    transition: all 0.4s;
 }
 
 .createCard:hover {
-    border-color: #ffbfba;
-    background-color: #27272a;
+    border-color: rgba(255, 191, 186, 0.3);
+    border-style: solid;
     color: #ffbfba;
-    transform: translateY(-6px);
-    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3);
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 
+        0 20px 40px -15px rgba(0, 0, 0, 0.5),
+        0 0 40px -10px rgba(255, 191, 186, 0.1);
+}
+
+.createCard:hover::before {
+    background: radial-gradient(circle at center, rgba(255, 191, 186, 0.05) 0%, transparent 70%);
 }
 
 .createIconWrapper {
-    width: 80px;
-    height: 80px;
-    border-radius: 24px;
-    background-color: #27272a;
+    width: 64px;
+    height: 64px;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
-    color: #a1a1aa;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #71717a;
 }
 
 .createCard:hover .createIconWrapper {
-    background-color: #ffbfba;
-    color: #09090b;
+    background: linear-gradient(135deg, #ffbfba 0%, #ffd4d1 100%);
+    border-color: transparent;
+    color: #0f0f0f;
     transform: scale(1.1) rotate(90deg);
+    box-shadow: 0 8px 24px rgba(255, 191, 186, 0.3);
 }
 
 .createText {
-    font-weight: 700;
-    font-size: 1.1rem;
-    letter-spacing: -0.02em;
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    transition: color 0.3s;
 }
 
 /* Delete Modal */
@@ -613,22 +764,61 @@
 
 .settingsButton {
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #a1a1aa;
-    width: 44px;
-    height: 44px;
-    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #71717a;
+    width: 38px;
+    height: 38px;
+    border-radius: 0.625rem;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
-    margin-right: 0.5rem;
+    flex-shrink: 0;
 }
 
 .settingsButton:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
     color: white;
+}
+
+/* Empty State */
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+    color: #52525b;
+    gap: 1rem;
+}
+
+.emptyStateIcon {
+    width: 64px;
+    height: 64px;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3f3f46;
+    margin-bottom: 0.5rem;
+}
+
+.emptyStateTitle {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #71717a;
+    margin: 0;
+}
+
+.emptyStateText {
+    font-size: 0.9rem;
+    color: #52525b;
+    margin: 0;
+    max-width: 300px;
 }
 

@@ -130,3 +130,60 @@
 .slider::-webkit-slider-thumb:hover {
     transform: scale(1.1);
 }
+
+.settingRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.settingInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.settingLabel {
+    color: #a1a1aa;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.languageButtons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.langButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.03);
+    color: #a1a1aa;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.langButton:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+.langButtonActive {
+    background-color: rgba(255, 191, 186, 0.15);
+    border-color: rgba(255, 191, 186, 0.3);
+    color: #ffbfba;
+}
+
+.langButtonActive:hover {
+    background-color: rgba(255, 191, 186, 0.2);
+    border-color: rgba(255, 191, 186, 0.4);
+    color: #ffbfba;
+}

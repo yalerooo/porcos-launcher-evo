@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import ModpackInstallModal from '@/components/ModpackInstallModal';
 import ModInstallSuccessModal from '@/components/ModInstallSuccessModal';
 import ModDetailsView from '@/components/ModDetailsView';
+import { useI18n } from '@/i18n';
 
 // Force refresh check
 console.log("Mods Page Loaded - Timestamp:", Date.now());
@@ -17,23 +18,23 @@ type ModSource = 'modrinth' | 'curseforge' | 'porcos';
 type SearchType = 'mods' | 'modpacks' | 'updates';
 
 const CATEGORIES = [
-    { id: "adventure", name: "Aventura", cfId: 406 },
-    { id: "decoration", name: "Decoración", cfId: 420 },
-    { id: "equipment", name: "Equipamiento", cfId: 434 },
-    { id: "food", name: "Comida", cfId: 411 },
-    { id: "game-mechanics", name: "Mecánicas de Juego", cfId: 416 },
-    { id: "library", name: "Librería", cfId: 421 },
-    { id: "magic", name: "Magia", cfId: 419 },
-    { id: "management", name: "Gestión", cfId: 408 },
-    { id: "minigame", name: "Minijuego", cfId: 430 },
-    { id: "mobs", name: "Mobs", cfId: 414 },
-    { id: "optimization", name: "Optimización", cfId: 427 },
-    { id: "social", name: "Social", cfId: 428 },
-    { id: "storage", name: "Almacenamiento", cfId: 423 },
-    { id: "technology", name: "Tecnología", cfId: 412 },
-    { id: "transportation", name: "Transporte", cfId: 415 },
-    { id: "utility", name: "Utilidad", cfId: 426 },
-    { id: "world-generation", name: "Generación de Mundo", cfId: 409 },
+    { id: "adventure", nameKey: "catAdventure", cfId: 406 },
+    { id: "decoration", nameKey: "catDecoration", cfId: 420 },
+    { id: "equipment", nameKey: "catEquipment", cfId: 434 },
+    { id: "food", nameKey: "catFood", cfId: 411 },
+    { id: "game-mechanics", nameKey: "catGameMechanics", cfId: 416 },
+    { id: "library", nameKey: "catLibrary", cfId: 421 },
+    { id: "magic", nameKey: "catMagic", cfId: 419 },
+    { id: "management", nameKey: "catManagement", cfId: 408 },
+    { id: "minigame", nameKey: "catMinigame", cfId: 430 },
+    { id: "mobs", nameKey: "catMobs", cfId: 414 },
+    { id: "optimization", nameKey: "catOptimization", cfId: 427 },
+    { id: "social", nameKey: "catSocial", cfId: 428 },
+    { id: "storage", nameKey: "catStorage", cfId: 423 },
+    { id: "technology", nameKey: "catTechnology", cfId: 412 },
+    { id: "transportation", nameKey: "catTransportation", cfId: 415 },
+    { id: "utility", nameKey: "catUtility", cfId: 426 },
+    { id: "world-generation", nameKey: "catWorldGeneration", cfId: 409 },
 ];
 
 const InstanceDropdownIcon = ({ instance }: { instance: any }) => {
@@ -160,6 +161,7 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ value, onChange, option
 };
 
 const Mods: React.FC = () => {
+    const { t } = useI18n();
     const { selectedInstance, instances } = useLauncherStore();
     const [searchQuery, setSearchQuery] = useState('');
     const [activeSource, setActiveSource] = useState<ModSource>('modrinth');
@@ -1403,21 +1405,21 @@ const Mods: React.FC = () => {
                             className={cn(styles.switchButton, searchType === 'mods' && styles.switchButtonActive)}
                         >
                             <Package size={16} />
-                            Mods
+                            {t('modsTab')}
                         </button>
                         <button
                             onClick={() => setSearchType('modpacks')}
                             className={cn(styles.switchButton, searchType === 'modpacks' && styles.switchButtonActive)}
                         >
                             <Box size={16} />
-                            Modpacks
+                            {t('modpacks')}
                         </button>
                         <button
                             onClick={() => setSearchType('updates')}
                             className={cn(styles.switchButton, searchType === 'updates' && styles.switchButtonActive)}
                         >
                             <RefreshCw size={16} />
-                            Actualizaciones
+                            {t('updates')}
                         </button>
                     </div>
 
@@ -1451,7 +1453,7 @@ const Mods: React.FC = () => {
                 {/* Bottom Row: Instance Selector (Only for Mods) */}
                 {(searchType === 'mods' || searchType === 'updates') && (
                     <div className={styles.controlsRow}>
-                        <span className={styles.label}>Instalar en:</span>
+                        <span className={styles.label}>{t('installIn')}</span>
                         <div className={styles.instanceSelectorWrapper}>
                             <button 
                                 className={styles.instanceSelector}
@@ -1488,7 +1490,7 @@ const Mods: React.FC = () => {
                                 value={filterVersion}
                                 onChange={setFilterVersion}
                                 options={(targetInstance?.versions || []).map(v => ({ value: v, label: v }))}
-                                placeholder="Versión (Cualquiera)"
+                                placeholder={t('anyVersion')}
                                 icon={<Gamepad2 size={16} className="text-[#a1a1aa]" />}
                             />
                         )}
@@ -1498,7 +1500,7 @@ const Mods: React.FC = () => {
                             <div className={styles.filterBadge}>
                                 <Filter size={12} className="text-[#ffbfba]" />
                                 <span className={styles.filterBadgeText}>
-                                    Filtrado por: {filterVersion} {filterLoader && `(${filterLoader})`}
+                                    {t('filteredBy')} {filterVersion} {filterLoader && `(${filterLoader})`}
                                 </span>
                             </div>
                         )}
@@ -1515,7 +1517,7 @@ const Mods: React.FC = () => {
                                 ) : (
                                     <RefreshCw size={14} />
                                 )}
-                                {isUpdatingAll ? 'Actualizando...' : `Actualizar Todo (${items.filter(item => updatesAvailable.get(item.id)).length})`}
+                                {isUpdatingAll ? t('updating') : `${t('updateAll')} (${items.filter(item => updatesAvailable.get(item.id)).length})`}
                             </button>
                         )}
 
@@ -1525,7 +1527,7 @@ const Mods: React.FC = () => {
                                 onClick={verifyDependencies}
                                 disabled={isUpdatingAll}
                                 className={styles.updateAllButton}
-                                title="Verificar y reparar dependencias"
+                                title={t('verifyDependencies')}
                                 style={{ minWidth: '180px' }}
                             >
                                 {isUpdatingAll ? (
@@ -1533,7 +1535,7 @@ const Mods: React.FC = () => {
                                 ) : (
                                     <ShieldCheck size={14} />
                                 )}
-                                {verificationStatus ? verificationStatus : (isUpdatingAll ? 'Ocupado...' : 'Verificar Dependencias')}
+                                {verificationStatus ? verificationStatus : (isUpdatingAll ? t('updating') : t('verifyDependencies'))}
                             </button>
                         )}
                     </div>
@@ -1549,7 +1551,7 @@ const Mods: React.FC = () => {
                                 value: v.id,
                                 label: `${v.id} ${v.version_type && v.version_type !== 'release' ? `(${v.version_type})` : ''}`
                             }))}
-                            placeholder="Versión (Cualquiera)"
+                            placeholder={t('anyVersion')}
                             icon={<Gamepad2 size={16} className="text-[#a1a1aa]" />}
                         />
                         <FilterDropdown
@@ -1561,7 +1563,7 @@ const Mods: React.FC = () => {
                                 { value: "quilt", label: "Quilt" },
                                 { value: "neoforge", label: "NeoForge" }
                             ]}
-                            placeholder="Cualquiera"
+                            placeholder={t('anyLoader')}
                             icon={<Cpu size={16} className="text-[#a1a1aa]" />}
                         />
                     </div>
@@ -1572,13 +1574,13 @@ const Mods: React.FC = () => {
                 {/* Sidebar */}
                 {(searchType === 'mods' || searchType === 'modpacks') && activeSource !== 'porcos' && (
                     <div className={styles.sidebar}>
-                        <h3 className={styles.categoryTitle}>Categorías</h3>
+                        <h3 className={styles.categoryTitle}>{t('categories')}</h3>
                         <div className={styles.categoryList}>
                             <button
                                 onClick={() => setFilterCategory('')}
                                 className={cn(styles.categoryButton, !filterCategory && styles.categoryButtonActive)}
                             >
-                                Todas
+                                {t('allCategories')}
                             </button>
                             {CATEGORIES.map(cat => (
                                 <button
@@ -1586,7 +1588,7 @@ const Mods: React.FC = () => {
                                     onClick={() => setFilterCategory(cat.id)}
                                     className={cn(styles.categoryButton, filterCategory === cat.id && styles.categoryButtonActive)}
                                 >
-                                    {cat.name}
+                                    {t(cat.nameKey as any)}
                                 </button>
                             ))}
                         </div>
@@ -1603,11 +1605,11 @@ const Mods: React.FC = () => {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder={`Buscar ${searchType} en ${activeSource === 'modrinth' ? 'Modrinth' : 'CurseForge'}...`}
+                                    placeholder={t('searchPlaceholder', { type: searchType, source: activeSource === 'modrinth' ? 'Modrinth' : 'CurseForge' })}
                                     className={styles.searchInput}
                                 />
                                 <button type="submit" className={styles.searchButton}>
-                                    Buscar
+                                    {t('searchButton')}
                                 </button>
                             </div>
                         </form>
@@ -1683,24 +1685,24 @@ const Mods: React.FC = () => {
                                                 ) : searchType === 'modpacks' ? (
                                                     <>
                                                         <Plus size={18} />
-                                                        Crear Instancia
+                                                        {t('createInstanceFromModpack')}
                                                     </>
                                                 ) : isInstalled ? (
                                                     hasUpdate ? (
                                                         <>
                                                             <Download size={18} />
-                                                            Actualizar
+                                                            {t('update')}
                                                         </>
                                                     ) : (
                                                         <>
                                                             <Check size={18} />
-                                                            Instalado
+                                                            {t('installed')}
                                                         </>
                                                     )
                                                 ) : (
                                                     <>
                                                         <Download size={18} />
-                                                        Instalar
+                                                        {t('install')}
                                                     </>
                                                 )}
                                             </button>
@@ -1713,12 +1715,12 @@ const Mods: React.FC = () => {
                                 {searchType === 'updates' ? (
                                     <>
                                         <Check size={48} className={styles.emptyIcon} />
-                                        <p>¡Todo está actualizado!</p>
+                                        <p>{t('allUpToDate')}</p>
                                     </>
                                 ) : (
                                     <>
                                         <Search size={48} className={styles.emptyIcon} />
-                                        <p>Busca {searchType} para empezar</p>
+                                        <p>{t('searchToStart', { type: searchType })}</p>
                                     </>
                                 )}
                             </div>
@@ -1733,17 +1735,17 @@ const Mods: React.FC = () => {
                                 disabled={page === 0}
                                 className={styles.pageButton}
                             >
-                                Anterior
+                                {t('previous')}
                             </button>
                             <span className={styles.pageInfo}>
-                                Página {page + 1} de {Math.ceil(totalHits / 20)}
+                                {t('pageOf', { current: page + 1, total: Math.ceil(totalHits / 20) })}
                             </span>
                             <button
                                 onClick={() => setPage(p => p + 1)}
                                 disabled={(page + 1) * 20 >= totalHits}
                                 className={styles.pageButton}
                             >
-                                Siguiente
+                                {t('nextPage')}
                             </button>
                         </div>
                     )}

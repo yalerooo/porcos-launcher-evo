@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Settings, Plus, Check, Play, Gamepad2, ChevronDown, Package, Download, AlertCircle } from 'lucide-react';
+import { useI18n } from '@/i18n';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -11,14 +12,15 @@ import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceSettings from '@/components/InstanceSettings';
 
 const InstanceIcon = ({ instance, isActive }: { instance: Instance, isActive: boolean }) => {
+    const imageCacheVersion = useLauncherStore(state => state.imageCacheVersion);
     const cached = getCachedImages(instance.id);
     const [src, setSrc] = useState(cached.icon || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
 
-    // Sync with cache when it becomes available
+    // Sync with cache when it becomes available (triggered by imageCacheVersion change)
     useEffect(() => {
         const cached = getCachedImages(instance.id);
         if (cached.icon) setSrc(cached.icon);
-    }, [instance.id, instance.icon, instance.backgroundImage]);
+    }, [instance.id, instance.icon, instance.backgroundImage, imageCacheVersion]);
 
     return (
         <div className={cn(
@@ -41,12 +43,14 @@ const InstanceIcon = ({ instance, isActive }: { instance: Instance, isActive: bo
 
 
 const Home: React.FC = () => {
+    const { t } = useI18n();
     const { 
         instances, selectedInstance, isLaunching, setIsLaunching, addLog, 
         memoryMin, memoryMax, setSelectedInstance, updateInstance,
         launchStage, launchProgress, setLaunchStage, setLaunchProgress,
         versions, setVersions, setInstances,
-        setLaunchStartTime
+        setLaunchStartTime,
+        imageCacheVersion
     } = useLauncherStore();
     const { user } = useAuthStore();
     const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -66,13 +70,13 @@ const Home: React.FC = () => {
     // Default to first if none selected
     const activeInstance = selectedInstance || instances[0];
     
-    // Sync preloaded icon from cache when active instance changes
+    // Sync preloaded icon from cache when active instance changes or cache updates
     useEffect(() => {
         if (activeInstance) {
             const cached = getCachedImages(activeInstance.id);
             if (cached.icon) setPreloadedSettingsIcon(cached.icon);
         }
-    }, [activeInstance?.id, activeInstance?.icon, activeInstance?.backgroundImage]);
+    }, [activeInstance?.id, activeInstance?.icon, activeInstance?.backgroundImage, imageCacheVersion]);
 
     // Sync background from cache
     useEffect(() => {
@@ -85,7 +89,7 @@ const Home: React.FC = () => {
         if (cached.background) {
             setActiveBgSrc(cached.background);
         }
-    }, [activeInstance?.id, activeInstance?.backgroundImage]);
+    }, [activeInstance?.id, activeInstance?.backgroundImage, imageCacheVersion]);
 
     // Porcos Metadata State
     const [porcosMetadata, setPorcosMetadata] = useState<any>(null);
@@ -149,7 +153,7 @@ const Home: React.FC = () => {
     const handleUpdateInstance = async () => {
         if (!activeInstance || !porcosMetadata || !updateAvailable) return;
         
-        setLaunchStage("Iniciando actualización...");
+        setLaunchStage(t('initializingUpdate'));
         setLaunchProgress(0);
         setIsLaunching(true); // Reuse launching UI for progress
 
@@ -191,7 +195,7 @@ const Home: React.FC = () => {
                     let currentStep = 0;
 
                     for (const update of updates) {
-                        setLaunchStage(`Actualizando a v${update.version}...`);
+                        setLaunchStage(t('updatingToVersion', { version: update.version }));
                         
                         // Download
                         const downloadUrls = [];
@@ -204,7 +208,7 @@ const Home: React.FC = () => {
                         }
                         
                         const zipPaths = [];
-                        setLaunchStage(`Descargando v${update.version} (${downloadUrls.length} partes)...`);
+                        setLaunchStage(t('downloadingVersionParts', { version: update.version, parts: downloadUrls.length }));
                         
                         let completedBatch = 0;
                         const downloadPromises = downloadUrls.map(async (url, i) => {
@@ -214,7 +218,7 @@ const Home: React.FC = () => {
                             
                             completedBatch++;
                             setLaunchProgress(((currentStep + completedBatch) / totalSteps) * 100);
-                            setLaunchStage(`Descargando v${update.version} (${completedBatch}/${downloadUrls.length})...`);
+                            setLaunchStage(t('downloadingProgress', { version: update.version, current: completedBatch, total: downloadUrls.length }));
                             
                             return filePath;
                         });
@@ -226,7 +230,7 @@ const Home: React.FC = () => {
                         // setLaunchProgress((currentStep / totalSteps) * 100); // Already updated in loop
                         
                         // Extract
-                        setLaunchStage(`Instalando v${update.version}...`);
+                        setLaunchStage(t('installingVersion', { version: update.version }));
                         const skipFiles = [
                             "servers.dat"
                         ];
@@ -253,7 +257,7 @@ const Home: React.FC = () => {
                         // Update Wallpaper if present
                         if (update.wallpaper) {
                             try {
-                                setLaunchStage(`Actualizando fondo de pantalla...`);
+                                setLaunchStage(t('updatingWallpaper'));
                                 const wallpaperUrl = update.wallpaper;
                                 
                                 // Generate hash for filename (same as install logic)
@@ -299,7 +303,7 @@ const Home: React.FC = () => {
                         // Update Icon if present
                         if (update.icon) {
                             try {
-                                setLaunchStage(`Actualizando icono...`);
+                                setLaunchStage(t('updatingIcon'));
                                 const iconUrl = update.icon;
                                 
                                 // Generate hash for filename
@@ -349,7 +353,7 @@ const Home: React.FC = () => {
                         porcosMetadata.version = update.version; // Keep mutation for loop continuity or use a local variable outside loop
                     }
                     
-                    setLaunchStage("¡Actualización completada!");
+                    setLaunchStage(t('updateCompleted'));
                     setLaunchProgress(100);
                     setUpdateAvailable(null); // No more updates
                     setTimeout(() => {
@@ -359,7 +363,7 @@ const Home: React.FC = () => {
             }
         } catch (e) {
             console.error("Update failed", e);
-            setLaunchStage("Error en la actualización");
+            setLaunchStage(t('updateError'));
             setTimeout(() => {
                 setIsLaunching(false);
             }, 2000);
@@ -575,16 +579,16 @@ const Home: React.FC = () => {
                     const { id, progress } = event.payload;
                     if (id === 'java-download-8') {
                         setLaunchProgress(progress);
-                        setLaunchStage(`Descargando Java 8 (${Math.round(progress)}%)...`);
+                        setLaunchStage(t('downloadingJava', { version: '8', progress: Math.round(progress) }));
                     } else if (id === 'java-download-16') {
                         setLaunchProgress(progress);
-                        setLaunchStage(`Descargando Java 16 (${Math.round(progress)}%)...`);
+                        setLaunchStage(t('downloadingJava', { version: '16', progress: Math.round(progress) }));
                     } else if (id === 'java-download-17') {
                         setLaunchProgress(progress);
-                        setLaunchStage(`Descargando Java 17 (${Math.round(progress)}%)...`);
+                        setLaunchStage(t('downloadingJava', { version: '17', progress: Math.round(progress) }));
                     } else if (id === 'java-download-21') {
                         setLaunchProgress(progress);
-                        setLaunchStage(`Descargando Java 21 (${Math.round(progress)}%)...`);
+                        setLaunchStage(t('downloadingJava', { version: '21', progress: Math.round(progress) }));
                     }
                 });
                 unlisteners.push(unlistenDownload);
@@ -609,7 +613,7 @@ const Home: React.FC = () => {
         
         setIsLaunching(true);
         setLaunchStartTime(Date.now());
-        setLaunchStage("Preparando...");
+        setLaunchStage(t('preparing'));
         setLaunchProgress(0);
 
         // Check for Porcos updates
@@ -621,7 +625,7 @@ const Home: React.FC = () => {
             
             const exists = await invoke('file_exists', { path: porcosJsonPath }) as boolean;
             if (exists) {
-                setLaunchStage("Buscando actualizaciones...");
+                setLaunchStage(t('searchingUpdates'));
                 const content = await invoke('read_text_file', { path: porcosJsonPath }) as string;
                 let porcosData = JSON.parse(content);
                 
@@ -643,7 +647,7 @@ const Home: React.FC = () => {
                             const tempDir = await join(cacheDir, 'temp_updates');
                             
                             for (const update of updates) {
-                                setLaunchStage(`Actualizando a v${update.version}...`);
+                                setLaunchStage(t('updatingToVersion', { version: update.version }));
                                 addLog(`Applying update ${update.version}...`);
                                 
                                 // Download
@@ -801,7 +805,7 @@ const Home: React.FC = () => {
 
             if (!await invoke('file_exists', { path: javaPath })) {
                 addLog(`${javaLabel} not found. Downloading...`);
-                setLaunchStage(`Descargando ${javaLabel}...`);
+                setLaunchStage(t('downloadingJavaLabel', { label: javaLabel }));
                 setLaunchProgress(0);
                 
                 const zipPath = await join(runtimeDir, javaZipName);
@@ -812,7 +816,7 @@ const Home: React.FC = () => {
                     id: javaId 
                 });
                 
-                setLaunchStage(`Descomprimiendo ${javaLabel}...`);
+                setLaunchStage(t('extractingJava', { label: javaLabel }));
                 await invoke('extract_zip', { zipPath, targetDir: runtimeDir });
                 await invoke('delete_file', { path: zipPath });
                 addLog(`${javaLabel} installed successfully.`);
@@ -859,7 +863,7 @@ const Home: React.FC = () => {
             setIsLaunching(false);
             setLaunchStartTime(null);
             setToastType('error');
-            setToastMessage(typeof error === 'string' ? error : "Error al iniciar el juego");
+            setToastMessage(typeof error === 'string' ? error : t('errorLaunching'));
             setTimeout(() => setToastMessage(null), 5000);
         }
     };
@@ -870,8 +874,8 @@ const Home: React.FC = () => {
                 <div className="w-24 h-24 bg-white/5 rounded-xl flex items-center justify-center mb-6">
                     <Box className="w-12 h-12 text-white/20" />
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">No hay instancias</h2>
-                <p className="text-[#a1a1aa] mb-8">Crea tu primera instancia para empezar.</p>
+                <h2 className="text-2xl font-bold text-white mb-2">{t('noInstances')}</h2>
+                <p className="text-[#a1a1aa] mb-8">{t('createFirstInstance')}</p>
                 
                 <button 
                     onClick={() => setShowCreateModal(true)}
@@ -956,12 +960,12 @@ const Home: React.FC = () => {
 
                 {/* Settings Button - Absolute Top Right */}
                 <div className="absolute top-4 right-4 z-50">
-                        <button 
+                    <button 
                         onClick={() => {
                             setShowSettingsModal(true);
                         }}
                         className={styles.settingsButton}
-                        title="Ajustes de Instancia"
+                        title={t('instanceSettings')}
                     >
                         <Settings size={24} />
                     </button>
@@ -1050,7 +1054,7 @@ const Home: React.FC = () => {
                                         className={styles.updateButton}
                                      >
                                          <Download size={16} />
-                                         Actualizar a v{updateAvailable.version}
+                                         {t('updateToVersion', { version: updateAvailable.version })}
                                      </motion.button>
                                  )}
                             </div>
@@ -1063,7 +1067,7 @@ const Home: React.FC = () => {
                                 className={styles.playButtonStyled}
                                 disabled={isLaunching}
                             >
-                                <span className={styles.playButtonText}>JUGAR</span>
+                                <span className={styles.playButtonText}>{t('play')}</span>
                                 <Play size={28} fill="currentColor" />
                             </button>
                         </div>

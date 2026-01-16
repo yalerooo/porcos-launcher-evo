@@ -1,24 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle, Settings } from 'lucide-react';
+import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle, SearchX } from 'lucide-react';
 import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import styles from './Instances.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceDetails from '@/components/InstanceDetails';
 import InstanceSettings from '@/components/InstanceSettings';
 
-const BACKGROUNDS = [
-    "1021170.png", "1102409.png", "1117616.jpg", "1117617.jpg", "1117618.jpg", "1117621.jpg", 
-    "1138899.png", "1168337.jpg", "1184187.jpg", "1186419.png", "1234635.png", "1240231.png", 
-    "1313226.png", "1313258.png", "1317021.png", "1317033.png", "1317036.png", "1321959.png", 
-    "1325278.jpeg", "1329100.png", "1333794.jpeg", "1333796.jpeg", "1333797.jpeg", "1353836.png", 
-    "1353838.png", "1363102.png", "1368460.png", "1370592.jpeg", "1374582.png", "1374585.png", 
-    "1377209.jpg", "1389013.png", "1391270.png", "1394736.png", "1394737.png", "377757.jpg", 
-    "473168.jpg", "556713.png", "556719.jpg", "556720.jpg", "556722.jpg", "556724.jpg", 
-    "556729.jpg", "556736.jpg", "557913.jpg", "558708.jpg", "733612.png"
-];
+const DEFAULT_BG = '/assets/thumbnails/1353838.png';
 
 interface InstanceCardProps {
     instance: Instance;
@@ -27,15 +19,16 @@ interface InstanceCardProps {
     onPlay: (e: React.MouseEvent, instance: Instance) => void;
     onDelete: (e: React.MouseEvent, id: string) => void;
     onUpdate: (id: string, updates: Partial<Instance>) => void;
-    onSettings: (e: React.MouseEvent, instance: Instance) => void;
     isLaunching: boolean;
+    imageCacheVersion: number;
 }
 
-const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, onPlay, onDelete, onUpdate, onSettings, isLaunching }) => {
+const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, onPlay, onDelete, onUpdate, isLaunching, imageCacheVersion }) => {
+    const { t } = useI18n();
     // Get cached images from global store
     const cached = getCachedImages(instance.id);
     const [iconSrc, setIconSrc] = useState(cached.icon || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
-    const [bgSrc, setBgSrc] = useState<string>(cached.thumbnail || `/assets/thumbnails/${BACKGROUNDS[0]}`);
+    const [bgSrc, setBgSrc] = useState<string>(cached.thumbnail || DEFAULT_BG);
     const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
 
     const handleVersionChange = async (version: string) => {
@@ -81,12 +74,12 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
         }
     };
 
-    // Sync with cached images when instance changes
+    // Sync with cached images when instance or cache version changes
     useEffect(() => {
         const cached = getCachedImages(instance.id);
         if (cached.icon) setIconSrc(cached.icon);
         if (cached.thumbnail) setBgSrc(cached.thumbnail);
-    }, [instance.id, instance.icon, instance.backgroundImage]);
+    }, [instance.id, instance.icon, instance.backgroundImage, imageCacheVersion]);
 
     return (
         <motion.div
@@ -176,19 +169,12 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                         disabled={isLaunching}
                     >
                         {isLaunching ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
-                        Jugar
-                    </button>
-                    <button 
-                        className={styles.settingsButton}
-                        onClick={(e) => onSettings(e, instance)}
-                        title="Ajustes de Instancia"
-                    >
-                        <Settings size={16} />
+                        {t('play')}
                     </button>
                     <button 
                         className={styles.deleteButton}
                         onClick={(e) => onDelete(e, instance.id)}
-                        title="Eliminar Instancia"
+                        title={t('deleteInstance')}
                     >
                         <Trash2 size={16} />
                     </button>
@@ -199,6 +185,7 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
 };
 
 const Instances: React.FC = () => {
+    const { t } = useI18n();
     const {
         instances,
         removeInstance,
@@ -212,7 +199,8 @@ const Instances: React.FC = () => {
         memoryMin,
         memoryMax,
         setSelectedInstance,
-        setLaunchStartTime
+        setLaunchStartTime,
+        imageCacheVersion
     } = useLauncherStore();
     const { user } = useAuthStore();
 
@@ -338,12 +326,12 @@ const Instances: React.FC = () => {
             removeInstance(instanceToDelete);
             setInstanceToDelete(null);
             setToastType('success');
-            setToastMessage("Instancia eliminada correctamente");
+            setToastMessage(t('instanceDeleted'));
             setTimeout(() => setToastMessage(null), 3000);
         } catch (error) {
             console.error("Failed to delete instance:", error);
             setToastType('error');
-            setToastMessage(`Error al eliminar: ${error}`);
+            setToastMessage(t('deleteError', { error: String(error) }));
             setTimeout(() => setToastMessage(null), 5000);
         } finally {
             setIsDeleting(false);
@@ -442,15 +430,20 @@ const Instances: React.FC = () => {
             {/* Header */}
             <div className={styles.header}>
                 <div className={styles.titleSection}>
-                    <h1 className={styles.title}>Mis Instancias</h1>
-                    <p className={styles.subtitle}>Gestiona y juega tus modpacks favoritos</p>
+                    <h1 className={styles.title}>
+                        {t('myInstances')}
+                        {instances.length > 0 && (
+                            <span className={styles.countBadge}>{instances.length}</span>
+                        )}
+                    </h1>
+                    <p className={styles.subtitle}>{t('myInstancesDesc')}</p>
                 </div>
                 
                 <div className="flex items-center gap-4">
                     <div className={styles.searchWrapper}>
                         <input 
                             type="text" 
-                            placeholder="Buscar..." 
+                            placeholder={t('search')} 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className={styles.searchInput}
@@ -471,9 +464,9 @@ const Instances: React.FC = () => {
                         onClick={() => setShowCreateModal(true)}
                     >
                         <div className={styles.createIconWrapper}>
-                            <Plus size={32} />
+                            <Plus size={28} strokeWidth={2.5} />
                         </div>
-                        <span className={styles.createText}>Crear Nueva Instancia</span>
+                        <span className={styles.createText}>{t('createNewInstance')}</span>
                     </motion.div>
 
                     {/* Instance Cards */}
@@ -486,14 +479,28 @@ const Instances: React.FC = () => {
                             onPlay={handlePlayInstance}
                             onDelete={handleDeleteInstance}
                             onUpdate={updateInstance}
-                            onSettings={(e, inst) => {
-                                e.stopPropagation();
-                                setViewingSettingsInstance(inst);
-                            }}
                             isLaunching={isLaunching}
+                            imageCacheVersion={imageCacheVersion}
                         />
                     ))}
                 </div>
+
+                {/* Empty State when searching */}
+                {searchTerm && filteredInstances.length === 0 && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={styles.emptyState}
+                    >
+                        <div className={styles.emptyStateIcon}>
+                            <SearchX size={28} />
+                        </div>
+                        <h3 className={styles.emptyStateTitle}>{t('noInstancesFound')}</h3>
+                        <p className={styles.emptyStateText}>
+                            {t('noInstancesFoundDesc', { term: searchTerm })}
+                        </p>
+                    </motion.div>
+                )}
             </div>
 
             {/* Create Modal */}
@@ -524,10 +531,9 @@ const Instances: React.FC = () => {
                         >
                             <div className={styles.deleteModalContent}>
                                 <div className={styles.deleteModalHeader}>
-                                    <h3 className={styles.deleteModalTitle}>¿Eliminar Instancia?</h3>
+                                    <h3 className={styles.deleteModalTitle}>{t('deleteInstance')}</h3>
                                     <p className={styles.deleteModalText}>
-                                        ¿Estás seguro de que quieres eliminar esta instancia?
-                                        Esta acción no se puede deshacer.
+                                        {t('deleteInstanceConfirm')}
                                     </p>
                                 </div>
                                 
@@ -536,7 +542,7 @@ const Instances: React.FC = () => {
                                         onClick={() => setInstanceToDelete(null)}
                                         className={styles.cancelButton}
                                     >
-                                        Cancelar
+                                        {t('cancel')}
                                     </button>
                                     <button
                                         onClick={confirmDelete}
@@ -546,10 +552,10 @@ const Instances: React.FC = () => {
                                         {isDeleting ? (
                                             <>
                                                 <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-                                                Eliminando...
+                                                {t('deleting')}
                                             </>
                                         ) : (
-                                            "Eliminar"
+                                            t('delete')
                                         )}
                                     </button>
                                 </div>

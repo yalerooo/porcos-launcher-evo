@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useLauncherStore } from "@/stores/launcherStore";
+import { useI18n } from "@/i18n";
 import {
     X,
     ChevronRight,
@@ -216,6 +217,9 @@ interface Props {
 }
 
 export default function InstanceSettings({ instance, onBack, onUpdate, onDelete, preloadedIconSrc }: Props) {
+    // i18n
+    const { t } = useI18n();
+    
     // Store
     const updateInstanceInStore = useLauncherStore((state) => state.updateInstance);
     
@@ -368,9 +372,9 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
             // Update store to keep UI in sync
             updateInstanceInStore(info.id, { name: updated.name });
             onUpdate?.();
-            showToast("success", "Nombre actualizado");
+            showToast("success", t('nameUpdated'));
         } catch {
-            showToast("error", "Error al actualizar");
+            showToast("error", t('updateError'));
         }
     };
 
@@ -388,9 +392,9 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                 // Update store
                 updateInstanceInStore(info.id, { icon: updated.icon });
                 onUpdate?.();
-                showToast("success", "Icono actualizado");
+                showToast("success", t('iconUpdated'));
             } catch {
-                showToast("error", "Error al actualizar icono");
+                showToast("error", t('iconUpdateError'));
             }
         }
     };
@@ -408,10 +412,10 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                     // Update store
                     updateInstanceInStore(info.id, { backgroundImage: updated.backgroundImage });
                     onUpdate?.();
-                    showToast("success", "Fondo actualizado");
+                    showToast("success", t('backgroundUpdated'));
                     setShowBgSelector(false);
                 } catch {
-                    showToast("error", "Error al actualizar fondo");
+                    showToast("error", t('backgroundUpdateError'));
                 }
             }
         } else {
@@ -422,10 +426,10 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                 // Update store
                 updateInstanceInStore(info.id, { backgroundImage: updated.backgroundImage });
                 onUpdate?.();
-                showToast("success", "Fondo actualizado");
+                showToast("success", t('backgroundUpdated'));
                 setShowBgSelector(false);
             } catch {
-                showToast("error", "Error al actualizar fondo");
+                showToast("error", t('backgroundUpdateError'));
             }
         }
     };
@@ -437,9 +441,9 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
             // Update store - also update selectedVersion since Home.tsx uses it
             updateInstanceInStore(info.id, { version: updated.version, selectedVersion: updated.version });
             onUpdate?.();
-            showToast("success", `Versión activa: ${getMcVersion(version)}`);
+            showToast("success", t('activeVersion', { version: getMcVersion(version) }));
         } catch {
-            showToast("error", "Error al cambiar versión");
+            showToast("error", t('changeVersionError'));
         }
     };
 
@@ -447,18 +451,18 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
         try {
             await invoke("open_instance_folder", { id: info.id });
         } catch {
-            showToast("error", "Error al abrir carpeta");
+            showToast("error", t('openFolderError'));
         }
     };
 
     const handleDeleteInstance = async () => {
         try {
             await invoke("delete_instance", { id: info.id });
-            showToast("success", "Instancia eliminada");
+            showToast("success", t('instanceDeleted'));
             onDelete?.();
             onBack();
         } catch {
-            showToast("error", "Error al eliminar");
+            showToast("error", t('deleteError'));
         }
     };
 
@@ -476,12 +480,12 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
             // Update store
             updateInstanceInStore(info.id, { versions: updated.versions, version: updated.version });
             onUpdate?.();
-            showToast("success", "Versión eliminada");
+            showToast("success", t('versionDeleted'));
             setShowDeleteModal(false);
             setVersionToDelete(null);
             setDeleteTarget(null);
         } catch {
-            showToast("error", "Error al eliminar versión");
+            showToast("error", t('deleteVersionError'));
         }
     };
 
@@ -495,7 +499,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
             
             const currentVersions = info.versions || [info.version];
             if (currentVersions.includes(versionString)) {
-                showToast("error", "Esta versión ya existe");
+                showToast("error", t('versionExists'));
                 setAddingVersion(false);
                 return;
             }
@@ -509,13 +513,13 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
             // Update store
             updateInstanceInStore(info.id, { versions: updated.versions });
             onUpdate?.();
-            showToast("success", `Versión añadida`);
+            showToast("success", t('versionAdded'));
             setShowAddVersion(false);
             setSelectedMcVersion("");
             setSelectedLoader("vanilla");
             setSelectedLoaderVersion("");
         } catch {
-            showToast("error", "Error al añadir versión");
+            showToast("error", t('addVersionError'));
         } finally {
             setAddingVersion(false);
         }
@@ -578,7 +582,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                     <div className={styles.content}>
                         {/* General Section */}
                         <div className={styles.sectionGroup}>
-                            <div className={styles.sectionLabel}>General</div>
+                            <div className={styles.sectionLabel}>{t('general')}</div>
                             <div className={styles.card}>
                                 {/* Name */}
                                 <div className={styles.inputRow}>
@@ -590,14 +594,14 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                         className={styles.inputField}
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
-                                        placeholder="Nombre de la instancia"
+                                        placeholder={t('instanceNamePlaceholder')}
                                     />
                                     <button 
                                         className={styles.inputSaveBtn}
                                         onClick={handleSaveName}
                                         disabled={name.trim() === info.name}
                                     >
-                                        Guardar
+                                        {t('save')}
                                     </button>
                                 </div>
                             </div>
@@ -605,15 +609,15 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
 
                         {/* Appearance */}
                         <div className={styles.sectionGroup}>
-                            <div className={styles.sectionLabel}>Apariencia</div>
+                            <div className={styles.sectionLabel}>{t('appearance')}</div>
                             <div className={styles.card}>
                                 <div className={styles.cardRow} onClick={handleSelectIcon}>
                                     <div className={`${styles.rowIcon} ${styles.rowIconPurple}`}>
                                         <Image size={14} />
                                     </div>
                                     <div className={styles.rowContent}>
-                                        <p className={styles.rowTitle}>Icono</p>
-                                        <p className={styles.rowSubtitle}>Cambiar imagen de la instancia</p>
+                                        <p className={styles.rowTitle}>{t('icon')}</p>
+                                        <p className={styles.rowSubtitle}>{t('changeInstanceIcon')}</p>
                                     </div>
                                     <ChevronRight size={18} className={styles.rowChevron} />
                                 </div>
@@ -622,8 +626,8 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                         <Layers size={14} />
                                     </div>
                                     <div className={styles.rowContent}>
-                                        <p className={styles.rowTitle}>Fondo</p>
-                                        <p className={styles.rowSubtitle}>Cambiar imagen de fondo</p>
+                                        <p className={styles.rowTitle}>{t('background')}</p>
+                                        <p className={styles.rowSubtitle}>{t('changeBackground')}</p>
                                     </div>
                                     <ChevronRight size={18} className={styles.rowChevron} />
                                 </div>
@@ -632,7 +636,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
 
                         {/* Versions */}
                         <div className={styles.sectionGroup}>
-                            <div className={styles.sectionLabel}>Versiones Instaladas</div>
+                            <div className={styles.sectionLabel}>{t('installedVersions')}</div>
                             <div className={styles.card}>
                                 <div className={styles.versionList}>
                                     {versions.map((v) => (
@@ -650,7 +654,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                             </div>
                                             <div className={styles.versionActions}>
                                                 {info.version === v && (
-                                                    <span className={styles.activeBadge}>Activa</span>
+                                                    <span className={styles.activeBadge}>{t('active')}</span>
                                                 )}
                                                 {versions.length > 1 && (
                                                     <button
@@ -678,19 +682,19 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                             onClick={() => setShowAddVersion(true)}
                                         >
                                             <Plus size={16} />
-                                            Añadir Versión
+                                            {t('addVersion')}
                                         </button>
                                     ) : (
                                         <div className={styles.addVersionForm}>
                                             {/* MC Version */}
                                             <div className={styles.formGroup}>
-                                                <label className={styles.formLabel}>Versión de Minecraft</label>
+                                                <label className={styles.formLabel}>{t('minecraftVersion')}</label>
                                                 <div className={styles.dropdown}>
                                                     <button
                                                         className={`${styles.dropdownTrigger} ${mcDropdownOpen ? styles.dropdownTriggerOpen : ""}`}
                                                         onClick={() => setMcDropdownOpen(!mcDropdownOpen)}
                                                     >
-                                                        {selectedMcVersion || <span className={styles.dropdownPlaceholder}>Seleccionar...</span>}
+                                                        {selectedMcVersion || <span className={styles.dropdownPlaceholder}>{t('select')}</span>}
                                                         <ChevronDown size={16} />
                                                     </button>
                                                     <AnimatePresence>
@@ -705,7 +709,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                                                     <input
                                                                         type="text"
                                                                         className={styles.dropdownSearchInput}
-                                                                        placeholder="Buscar versión..."
+                                                                        placeholder={t('searchVersion')}
                                                                         value={mcVersionSearch}
                                                                         onChange={(e) => setMcVersionSearch(e.target.value)}
                                                                         onClick={(e) => e.stopPropagation()}
@@ -752,15 +756,15 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                             {/* Loader Version */}
                                             {selectedLoader !== "vanilla" && selectedMcVersion && (
                                                 <div className={styles.formGroup}>
-                                                    <label className={styles.formLabel}>Versión de {selectedLoader}</label>
+                                                    <label className={styles.formLabel}>{t('loaderVersionLabel', { loader: selectedLoader })}</label>
                                                     {loadingLoaderVersions ? (
                                                         <div className={styles.loadingText}>
                                                             <Loader2 size={14} className={styles.loadingSpinner} />
-                                                            Cargando versiones...
+                                                            {t('loadingVersions')}
                                                         </div>
                                                     ) : loaderVersions.length === 0 ? (
                                                         <div className={styles.loadingText}>
-                                                            No hay versiones disponibles
+                                                            {t('noVersionsAvailable')}
                                                         </div>
                                                     ) : (
                                                         <div className={styles.dropdown}>
@@ -768,7 +772,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                                                 className={`${styles.dropdownTrigger} ${loaderDropdownOpen ? styles.dropdownTriggerOpen : ""}`}
                                                                 onClick={() => setLoaderDropdownOpen(!loaderDropdownOpen)}
                                                             >
-                                                                {selectedLoaderVersion || <span className={styles.dropdownPlaceholder}>Seleccionar...</span>}
+                                                                {selectedLoaderVersion || <span className={styles.dropdownPlaceholder}>{t('select')}</span>}
                                                                 <ChevronDown size={16} />
                                                             </button>
                                                             <AnimatePresence>
@@ -814,7 +818,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                                         setSelectedLoader("vanilla");
                                                     }}
                                                 >
-                                                    Cancelar
+                                                    {t('cancel')}
                                                 </button>
                                                 <button
                                                     className={`${styles.formBtn} ${styles.formBtnPrimary}`}
@@ -824,10 +828,10 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                                     {addingVersion ? (
                                                         <>
                                                             <Loader2 size={14} className={styles.loadingSpinner} />
-                                                            Añadiendo...
+                                                            {t('adding')}
                                                         </>
                                                     ) : (
-                                                        "Añadir"
+                                                        t('add')
                                                     )}
                                                 </button>
                                             </div>
@@ -839,15 +843,15 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
 
                         {/* Advanced */}
                         <div className={styles.sectionGroup}>
-                            <div className={styles.sectionLabel}>Avanzado</div>
+                            <div className={styles.sectionLabel}>{t('advanced')}</div>
                             <div className={styles.card}>
                                 <div className={styles.cardRow} onClick={handleOpenFolder}>
                                     <div className={`${styles.rowIcon} ${styles.rowIconGreen}`}>
                                         <Folder size={14} />
                                     </div>
                                     <div className={styles.rowContent}>
-                                        <p className={styles.rowTitle}>Abrir Carpeta</p>
-                                        <p className={styles.rowSubtitle}>Explorar archivos de la instancia</p>
+                                        <p className={styles.rowTitle}>{t('openFolder')}</p>
+                                        <p className={styles.rowSubtitle}>{t('exploreInstanceFiles')}</p>
                                     </div>
                                     <ChevronRight size={18} className={styles.rowChevron} />
                                 </div>
@@ -856,7 +860,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
 
                         {/* Danger Zone */}
                         <div className={styles.sectionGroup}>
-                            <div className={styles.sectionLabel}>Zona de Peligro</div>
+                            <div className={styles.sectionLabel}>{t('dangerZone')}</div>
                             <div className={`${styles.card} ${styles.dangerCard}`}>
                                 <div 
                                     className={styles.cardRow} 
@@ -869,8 +873,8 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                         <Trash2 size={14} />
                                     </div>
                                     <div className={styles.rowContent}>
-                                        <p className={styles.rowTitle}>Eliminar Instancia</p>
-                                        <p className={styles.rowSubtitle}>Esta acción no se puede deshacer</p>
+                                        <p className={styles.rowTitle}>{t('deleteInstanceTitle')}</p>
+                                        <p className={styles.rowSubtitle}>{t('actionCannotBeUndone')}</p>
                                     </div>
                                     <ChevronRight size={18} className={styles.rowChevron} />
                                 </div>
@@ -897,7 +901,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                             exit={{ scale: 0.95, opacity: 0 }}
                         >
                             <div className={styles.bgModalHeader}>
-                                <h2 className={styles.bgModalTitle}>Seleccionar Fondo</h2>
+                                <h2 className={styles.bgModalTitle}>{t('selectBackground')}</h2>
                                 <button className={styles.bgModalClose} onClick={() => setShowBgSelector(false)}>
                                     <X size={16} />
                                 </button>
@@ -906,7 +910,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                 <div className={styles.bgGrid}>
                                     <div className={styles.bgUpload} onClick={() => handleSelectBackground("custom")}>
                                         <Upload size={24} className={styles.bgUploadIcon} />
-                                        <span className={styles.bgUploadText}>Subir imagen</span>
+                                        <span className={styles.bgUploadText}>{t('uploadImage')}</span>
                                     </div>
                                     {BACKGROUNDS.map((bg) => (
                                         <div
@@ -949,17 +953,17 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                 <AlertTriangle size={24} />
                             </div>
                             <h3 className={styles.confirmModalTitle}>
-                                {deleteTarget === "instance" ? "¿Eliminar Instancia?" : "¿Eliminar Versión?"}
+                                {deleteTarget === "instance" ? t('deleteInstanceQuestion') : t('deleteVersionQuestion')}
                             </h3>
                             <p className={styles.confirmModalText}>
                                 {deleteTarget === "instance" ? (
                                     <>
-                                        Esto eliminará permanentemente{" "}
-                                        <span className={styles.confirmModalName}>{info.name}</span> y todos sus archivos.
+                                        {t('deleteInstanceWarning')}{" "}
+                                        <span className={styles.confirmModalName}>{info.name}</span>
                                     </>
                                 ) : (
                                     <>
-                                        ¿Eliminar la versión{" "}
+                                        {t('deleteVersionWarning')}{" "}
                                         <span className={styles.confirmModalName}>{versionToDelete}</span>?
                                     </>
                                 )}
@@ -973,13 +977,13 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
                                         setDeleteTarget(null);
                                     }}
                                 >
-                                    Cancelar
+                                    {t('cancel')}
                                 </button>
                                 <button
                                     className={`${styles.confirmModalBtn} ${styles.confirmModalBtnDanger}`}
                                     onClick={deleteTarget === "instance" ? handleDeleteInstance : handleDeleteVersion}
                                 >
-                                    Eliminar
+                                    {t('delete')}
                                 </button>
                             </div>
                         </motion.div>

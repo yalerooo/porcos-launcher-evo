@@ -4,12 +4,14 @@ import { Loader2, Copy, Check, User, ArrowLeft, Play } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/authStore';
 import TitleBar from '@/components/TitleBar';
+import { useI18n } from '@/i18n';
 
 interface LoginProps {
     onLoginSuccess: (profile: { username: string; uuid: string; mode: 'microsoft' | 'offline' }) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
+    const { t } = useI18n();
     const { setUser } = useAuthStore();
     const [isLoading, setIsLoading] = React.useState(false);
     const [view, setView] = React.useState<'main' | 'offline'>('main');
@@ -136,14 +138,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                 <span className="ms-title">Microsoft</span>
                             </div>
 
-                            <h2>Iniciar sesión con Microsoft</h2>
+                            <h2>{t('signInWithMicrosoft')}</h2>
 
                             <p className="ms-desc">
-                                Hemos abierto una ventana en tu navegador para continuar el inicio de sesión.
+                                {t('browserOpened')}
                             </p>
 
                             <p className="ms-desc-light">
-                                Introduce este código cuando se te solicite o haz clic para copiarlo:
+                                {t('enterCodeWhenPrompted')}
                             </p>
 
                             <div className="code-box">
@@ -155,9 +157,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
                             <div className="buttons">
                                 <button className="primary" onClick={copyCode}>
-                                    {copied ? "Copiado" : "Copiar código"}
+                                    {copied ? t('copied') : t('copyCode')}
                                 </button>
-                                <button className="secondary" onClick={cancelLogin}>Cancelar</button>
+                                <button className="secondary" onClick={cancelLogin}>{t('cancel')}</button>
                             </div>
                         </div>
                     </motion.div>
@@ -177,7 +179,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                             <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain drop-shadow-2xl rounded-3xl" />
                         </div>
                         <h1 className="text-3xl font-bold text-white tracking-tight">Porcos Launcher</h1>
-                        <p className="text-[#a1a1aa] text-sm">Bienvenido de nuevo</p>
+                        <p className="text-[#a1a1aa] text-sm">{t('welcomeBack')}</p>
                     </div>
 
                     {/* Login Options */}
@@ -207,7 +209,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                                     <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
                                                     <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
                                                 </svg>
-                                                Iniciar con Microsoft
+                                                {t('microsoftLogin')}
                                             </>
                                         )}
                                     </button>
@@ -217,7 +219,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                         className="w-full h-14 bg-transparent hover:bg-white/5 border border-white/10 text-white rounded-xl font-medium text-base transition-colors flex items-center justify-center gap-3"
                                     >
                                         <User size={20} />
-                                        Modo Offline
+                                        {t('offlineMode')}
                                     </button>
                                 </motion.div>
                             ) : (
@@ -230,10 +232,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                     className="flex flex-col gap-12"
                                 >
                                     <div className="space-y-3">
-                                        <label className="block text-sm font-medium text-[#a1a1aa] ml-1">Nombre de usuario</label>
+                                        <label className="block text-sm font-medium text-[#a1a1aa] ml-1">{t('offlineUsername')}</label>
                                         <input
                                             type="text"
-                                            placeholder="Ej. Steve"
+                                            placeholder={t('usernamePlaceholder')}
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleOfflineLogin()}
@@ -256,7 +258,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                         >
                                             {isLoading ? <Loader2 className="animate-spin w-6 h-6" /> : (
                                                 <>
-                                                    Entrar
+                                                    {t('enter')}
                                                     <Play size={20} fill="currentColor" />
                                                 </>
                                             )}

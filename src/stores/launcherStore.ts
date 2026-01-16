@@ -143,6 +143,7 @@ interface LauncherState {
     launchStartTime: number | null;
     consoleOutput: string[];
     crashReport: { path: string, content: string } | null;
+    imageCacheVersion: number; // Incremented when images are cached to trigger re-renders
     
     setVersions: (versions: any[]) => void;
     setInstances: (instances: Instance[]) => void;
@@ -178,12 +179,15 @@ export const useLauncherStore = create<LauncherState>()(
             launchStartTime: null,
             consoleOutput: [],
             crashReport: null,
+            imageCacheVersion: 0,
 
             setVersions: (versions) => set({ versions }),
             setInstances: (instances) => {
                 set({ instances });
                 // Preload images for all instances in background
-                Promise.all(instances.map(inst => preloadInstanceImages(inst))).catch(console.error);
+                Promise.all(instances.map(inst => preloadInstanceImages(inst)))
+                    .then(() => set(state => ({ imageCacheVersion: state.imageCacheVersion + 1 })))
+                    .catch(console.error);
             },
             addInstance: (instance) => {
                 const newInstance = {
@@ -193,7 +197,9 @@ export const useLauncherStore = create<LauncherState>()(
                 };
                 set((state) => ({ instances: [...state.instances, newInstance] }));
                 // Preload images for new instance
-                preloadInstanceImages(newInstance).catch(console.error);
+                preloadInstanceImages(newInstance)
+                    .then(() => set(state => ({ imageCacheVersion: state.imageCacheVersion + 1 })))
+                    .catch(console.error);
             },
             updateInstance: (id, updates) => {
                 set((state) => ({
@@ -205,7 +211,9 @@ export const useLauncherStore = create<LauncherState>()(
                     invalidateInstanceImageCache(id);
                     const instance = get().instances.find(i => i.id === id);
                     if (instance) {
-                        preloadInstanceImages(instance).catch(console.error);
+                        preloadInstanceImages(instance)
+                            .then(() => set(state => ({ imageCacheVersion: state.imageCacheVersion + 1 })))
+                            .catch(console.error);
                     }
                 }
             },
@@ -229,6 +237,7 @@ export const useLauncherStore = create<LauncherState>()(
             preloadAllImages: async () => {
                 const instances = get().instances;
                 await Promise.all(instances.map(inst => preloadInstanceImages(inst)));
+                set(state => ({ imageCacheVersion: state.imageCacheVersion + 1 }));
             },
         }),
         {

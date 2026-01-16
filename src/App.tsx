@@ -24,10 +24,16 @@ function App() {
   const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(true);
+  const [imagesReady, setImagesReady] = React.useState(false);
 
   // Preload all instance images on app start
   React.useEffect(() => {
-    preloadAllImages().catch(console.error);
+    preloadAllImages()
+      .then(() => setImagesReady(true))
+      .catch((err) => {
+        console.error('Failed to preload images:', err);
+        setImagesReady(true); // Continue anyway on error
+      });
   }, [preloadAllImages]);
 
   // Check for existing session on mount
@@ -80,7 +86,8 @@ function App() {
     }
   };
 
-  if (isLoading) {
+  // Wait for both session check AND images to be ready
+  if (isLoading || (currentView === 'app' && !imagesReady)) {
     return (
       <div className="app-window flex items-center justify-center bg-[var(--bg-primary)]">
         {/* Optional: Add a spinner here */}

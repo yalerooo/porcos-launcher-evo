@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Home, Settings, Terminal, LogOut, Box } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/i18n';
 
 interface SidebarProps {
     activePage: string;
@@ -14,12 +15,15 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, onLogout, userProfile }) => {
-    const menuItems = [
-        { id: 'home', icon: Home, label: 'Inicio' },
-        { id: 'instances', icon: Box, label: 'Instancias' },
-        { id: 'settings', icon: Settings, label: 'Ajustes' },
-        { id: 'console', icon: Terminal, label: 'Consola' },
-    ];
+    const { t, language } = useI18n();
+    
+    // Using language as dependency to ensure re-render when language changes
+    const menuItems = React.useMemo(() => [
+        { id: 'home', icon: Home, label: t('home') },
+        { id: 'instances', icon: Box, label: t('instances') },
+        { id: 'settings', icon: Settings, label: t('settings') },
+        { id: 'console', icon: Terminal, label: t('console') },
+    ], [language, t]);
 
     return (
         <motion.div 

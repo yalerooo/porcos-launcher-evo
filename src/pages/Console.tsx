@@ -3,8 +3,10 @@ import { motion } from 'framer-motion';
 import { Terminal, Trash2 } from 'lucide-react';
 import { useLauncherStore } from '@/stores/launcherStore';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/i18n';
 
 const Console: React.FC = () => {
+    const { t } = useI18n();
     const { consoleOutput, clearLogs } = useLauncherStore();
     const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -25,7 +27,7 @@ const Console: React.FC = () => {
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
                     <div className="flex items-center gap-2 text-[var(--text-secondary)]">
                         <Terminal className="w-4 h-4" />
-                        <span className="font-mono text-sm font-bold">Launcher Output</span>
+                        <span className="font-mono text-sm font-bold">{t('consoleTitle')}</span>
                     </div>
                     <Button
                         variant="ghost"
@@ -44,7 +46,7 @@ const Console: React.FC = () => {
                 >
                     {consoleOutput.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-[var(--text-secondary)] italic">
-                            Esperando logs...
+                            {t('waitingLogs')}
                         </div>
                     ) : (
                         consoleOutput.map((line, idx) => (

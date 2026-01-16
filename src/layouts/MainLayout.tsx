@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Home, Box, Settings, Terminal, LogOut, Minus, X, Puzzle, AlertCircle, Square, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -6,6 +6,7 @@ import styles from '../pages/Home.module.css';
 import { useLauncherStore } from '@/stores/launcherStore';
 import { listen } from '@tauri-apps/api/event';
 import UpdateChecker from '@/components/UpdateChecker';
+import { useI18n } from '@/i18n';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -177,13 +178,15 @@ export default function MainLayout({
       };
   }, []);
 
-  const navItems = [
-    { id: 'home', label: 'Inicio', icon: Home },
-    { id: 'instances', label: 'Instancias', icon: Box },
-    { id: 'mods', label: 'Mods', icon: Puzzle },
-    { id: 'settings', label: 'Ajustes', icon: Settings },
-    { id: 'console', label: 'Consola', icon: Terminal },
-  ];
+  const { t, language } = useI18n();
+
+  const navItems = useMemo(() => [
+    { id: 'home', label: t('home'), icon: Home },
+    { id: 'instances', label: t('instances'), icon: Box },
+    { id: 'mods', label: t('mods'), icon: Puzzle },
+    { id: 'settings', label: t('settings'), icon: Settings },
+    { id: 'console', label: t('console'), icon: Terminal },
+  ], [language, t]);
 
   // Avatar URL logic
   // Use mc-heads to ensure we get a rendered head/avatar, not a raw skin texture
@@ -214,7 +217,7 @@ export default function MainLayout({
                 
                 <div className="ml-0 max-w-0 overflow-hidden opacity-0 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100 group-hover/sidebar:ml-3 transition-all duration-300 flex flex-col justify-center">
                     <span className="font-bold text-white text-lg truncate max-w-[120px] leading-tight">{userProfile.username}</span>
-                    <span className="text-xs text-green-400 font-medium">Online</span>
+                    <span className="text-xs text-green-400 font-medium">{t('online')}</span>
                 </div>
              </div>
         </div>
@@ -261,7 +264,7 @@ export default function MainLayout({
                     <LogOut size={26} className="transition-transform duration-300 group-hover/btn:scale-110" />
                 </div>
                 <span className="font-bold text-base transition-all duration-300 overflow-hidden whitespace-nowrap ml-0 max-w-0 opacity-0 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100 group-hover/sidebar:ml-3">
-                    Cerrar Sesión
+                    {t('logout')}
                 </span>
              </button>
         </div>
@@ -279,7 +282,7 @@ export default function MainLayout({
                 <button 
                     onClick={() => appWindow.minimize()} 
                     className="h-full w-[56px] flex items-center justify-center hover:bg-white/10 transition-colors group/min"
-                    title="Minimizar"
+                    title={t('minimize')}
                 >
                     <Minus size={20} className="text-white" strokeWidth={1.5} />
                 </button>
@@ -301,7 +304,7 @@ export default function MainLayout({
                         }
                     }}
                     className="h-full w-[56px] flex items-center justify-center hover:bg-white/10 transition-colors group/max"
-                    title={isMaximized ? "Restaurar" : "Maximizar"}
+                    title={isMaximized ? t('restore') : t('maximize')}
                 >
                     {isMaximized ? (
                         <Copy size={16} className="text-white" strokeWidth={2} style={{ transform: 'rotate(90deg)' }} />
@@ -312,7 +315,7 @@ export default function MainLayout({
                 <button 
                     onClick={() => appWindow.close()} 
                     className="h-full w-[56px] flex items-center justify-center hover:bg-[#e81123] transition-colors group/close"
-                    title="Cerrar"
+                    title={t('close')}
                 >
                     <X size={20} className="text-white" strokeWidth={1.5} />
                 </button>
@@ -354,14 +357,14 @@ export default function MainLayout({
                 <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between" style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
                     <div className="flex items-center gap-2 text-red-400">
                         <AlertCircle className="w-5 h-5" />
-                        <h3 className="text-lg font-semibold text-white">Game Crashed!</h3>
+                        <h3 className="text-lg font-semibold text-white">{t('gameCrashed')}</h3>
                     </div>
                     <button className="p-2 rounded-lg text-zinc-400 hover:bg-white/10 hover:text-white transition-colors" onClick={() => setCrashReport(null)}>
                         <X className="w-5 h-5" />
                     </button>
                 </div>
                 <div className="px-6 py-2 text-sm text-zinc-400 border-b border-white/5">
-                    Report saved to: <span className="text-zinc-300 select-all">{crashReport.path}</span>
+                    {t('reportSavedTo')}: <span className="text-zinc-300 select-all">{crashReport.path}</span>
                 </div>
                 <style>{`
                     .crash-report-content::selection {
