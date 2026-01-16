@@ -1110,6 +1110,7 @@ const Home: React.FC = () => {
                             instance={activeInstance} 
                             onBack={() => setShowSettingsModal(false)}
                             preloadedIconSrc={preloadedSettingsIcon}
+                            preloadedBgSrc={activeBgSrc}
                         />
                     )}
                 </AnimatePresence>

@@ -214,9 +214,10 @@ interface Props {
     onUpdate?: () => void;
     onDelete?: () => void;
     preloadedIconSrc?: string;
+    preloadedBgSrc?: string;
 }
 
-export default function InstanceSettings({ instance, onBack, onUpdate, onDelete, preloadedIconSrc }: Props) {
+export default function InstanceSettings({ instance, onBack, onUpdate, onDelete, preloadedIconSrc, preloadedBgSrc }: Props) {
     // i18n
     const { t } = useI18n();
     
@@ -250,7 +251,7 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
 
     // Icon and background
     const [iconSrc, setIconSrc] = useState(preloadedIconSrc || "/assets/thumbnails/default.png");
-    const [bgSrc, setBgSrc] = useState("/assets/backgrounds/1021170.png");
+    const [bgSrc, setBgSrc] = useState(preloadedBgSrc || "/assets/backgrounds/1021170.png");
 
     // Sync with props - only when switching to a different instance
     useEffect(() => {
@@ -269,6 +270,12 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
             } else {
                 const icon = await preloadInstanceIcon(instance);
                 setIconSrc(icon);
+            }
+            
+            // If background is already preloaded, skip loading
+            if (preloadedBgSrc) {
+                setBgSrc(preloadedBgSrc);
+                return;
             }
             
             // Background - use backgroundImage only, NOT the icon
