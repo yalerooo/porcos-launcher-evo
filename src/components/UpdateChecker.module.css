@@ -4,8 +4,9 @@
     right: 0;
     bottom: 0;
     left: 65px;
-    background-color: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(4px);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -15,17 +16,34 @@
 }
 
 .modal {
-    background-color: #09090b;
+    background: linear-gradient(145deg, rgba(30, 30, 35, 0.9) 0%, rgba(20, 20, 25, 0.95) 100%);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
     width: 100%;
     max-width: 460px;
-    border-radius: 16px;
-    border: 1px solid #27272a;
+    border-radius: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.8);
+    box-shadow: 
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 20px 50px -10px rgba(0, 0, 0, 0.5),
+        0 0 100px -20px rgba(255, 191, 186, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
     position: relative;
     animation: modalEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 191, 186, 0.5), transparent);
+    z-index: 1;
 }
 
 @keyframes modalEnter {
@@ -50,13 +68,13 @@
 }
 
 .header {
-    background-color: #18181b;
+    background: rgba(255, 255, 255, 0.02);
     padding: 2rem;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
-    border-bottom: 1px solid #27272a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .iconContainer {

@@ -555,8 +555,9 @@
     bottom: 0;
     left: 65px;
     z-index: 200;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(8px);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -565,14 +566,32 @@
 }
 
 .modalContent {
-    background: #18181b;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
+    background: linear-gradient(145deg, rgba(30, 30, 35, 0.9) 0%, rgba(20, 20, 25, 0.95) 100%);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1.5rem;
     padding: 2rem;
     width: 100%;
     max-width: 480px;
-    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
+    box-shadow: 
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 20px 50px -10px rgba(0, 0, 0, 0.5),
+        0 0 100px -20px rgba(255, 191, 186, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+
+.modalContent::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 191, 186, 0.5), transparent);
+    border-radius: 1.5rem 1.5rem 0 0;
 }
 
 .modalHeader {
@@ -699,7 +718,9 @@
     bottom: 0;
     left: 65px;
     z-index: 300;
-    background: rgba(0, 0, 0, 0.95);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.8) 100%);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -712,8 +733,10 @@
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
-    border-radius: 8px;
-    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    border-radius: 12px;
+    box-shadow: 
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        0 25px 60px rgba(0, 0, 0, 0.5);
 }
 
 .closeModalButton {
@@ -747,8 +770,9 @@
     bottom: 0;
     left: 65px;
     z-index: 300;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(4px);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -760,9 +784,11 @@
     width: 100%;
     max-width: 900px;
     height: 80vh;
-    background: #18181b;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 24px;
+    background: linear-gradient(145deg, rgba(30, 30, 35, 0.9) 0%, rgba(20, 20, 25, 0.95) 100%);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1.5rem;
     display: flex;
     flex-direction: column;
     overflow: hidden;

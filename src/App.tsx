@@ -7,6 +7,7 @@ import Instances from '@/pages/Instances';
 import Mods from '@/pages/Mods';
 import React from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { useLauncherStore } from '@/stores/launcherStore';
 
 interface UserProfile {
   username: string;
@@ -17,11 +18,17 @@ interface UserProfile {
 
 function App() {
   const { user, isAuthenticated, isTokenValid, logout } = useAuthStore();
+  const preloadAllImages = useLauncherStore((state) => state.preloadAllImages);
   const [currentView, setCurrentView] = React.useState<'login' | 'app'>('login');
   const [activePage, setActivePage] = React.useState('home');
   const [userProfile, setUserProfile] = React.useState<UserProfile | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(true);
+
+  // Preload all instance images on app start
+  React.useEffect(() => {
+    preloadAllImages().catch(console.error);
+  }, [preloadAllImages]);
 
   // Check for existing session on mount
   React.useEffect(() => {

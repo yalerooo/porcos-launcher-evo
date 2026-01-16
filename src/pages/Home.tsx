@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Settings, Plus, Check, Play, Gamepad2, ChevronDown, Package, Download, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { useLauncherStore, Instance } from '@/stores/launcherStore';
+import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 
@@ -10,81 +10,15 @@ import styles from './Home.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceSettings from '@/components/InstanceSettings';
 
-const BACKGROUNDS = [
-    "1021170.png", "1102409.png", "1117616.jpg", "1117617.jpg", "1117618.jpg", "1117621.jpg", 
-    "1138899.png", "1168337.jpg", "1184187.jpg", "1186419.png", "1234635.png", "1240231.png", 
-    "1313226.png", "1313258.png", "1317021.png", "1317033.png", "1317036.png", "1321959.png", 
-    "1325278.jpeg", "1329100.png", "1333794.jpeg", "1333796.jpeg", "1333797.jpeg", "1353836.png", 
-    "1353838.png", "1363102.png", "1368460.png", "1370592.jpeg", "1374582.png", "1374585.png", 
-    "1377209.jpg", "1389013.png", "1391270.png", "1394736.png", "1394737.png", "377757.jpg", 
-    "473168.jpg", "556713.png", "556719.jpg", "556720.jpg", "556722.jpg", "556724.jpg", 
-    "556729.jpg", "556736.jpg", "557913.jpg", "558708.jpg", "733612.png"
-];
-
-// Cache for background blobs to avoid re-reading files
-const bgCache = new Map<string, string>();
-
 const InstanceIcon = ({ instance, isActive }: { instance: Instance, isActive: boolean }) => {
-    const [src, setSrc] = useState("https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
+    const cached = getCachedImages(instance.id);
+    const [src, setSrc] = useState(cached.icon || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
 
+    // Sync with cache when it becomes available
     useEffect(() => {
-        let isMounted = true;
-        const loadIcon = async () => {
-            const imgSource = instance.icon || instance.backgroundImage || (instance as any).background_image;
-            
-            if (!imgSource) {
-                 if (isMounted) setSrc("https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
-                 return;
-            }
-
-            // Check cache first
-            const cacheKey = `${instance.id}-${imgSource}`;
-            if (bgCache.has(cacheKey)) {
-                if (isMounted) setSrc(bgCache.get(cacheKey)!);
-                return;
-            }
-
-            let newSrc = "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg";
-
-            if (imgSource.startsWith('http')) {
-                newSrc = imgSource;
-            } else if (imgSource.startsWith('assets/') || imgSource.startsWith('/assets/')) {
-                newSrc = imgSource.startsWith('/') ? imgSource : `/${imgSource}`;
-            } else if (BACKGROUNDS.includes(imgSource)) {
-                newSrc = `/assets/thumbnails/${imgSource}`;
-            } else {
-                // Custom file
-                try {
-                    const { invoke } = await import("@tauri-apps/api/core");
-                    const { join, isAbsolute } = await import("@tauri-apps/api/path");
-                    
-                    let fullPath = imgSource;
-                    // Robust absolute path check
-                    const isAbs = await isAbsolute(imgSource) || imgSource.includes(':\\') || imgSource.startsWith('/');
-                    
-                    if (!isAbs) {
-                        const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
-                        fullPath = await join(instancePath, imgSource);
-                    }
-                    
-                    // Use read_binary_file for reliability
-                    const data = await invoke("read_binary_file", { path: fullPath }) as number[];
-                    const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
-                    newSrc = URL.createObjectURL(blob);
-                    
-                    // Cache it
-                    bgCache.set(cacheKey, newSrc);
-                } catch (e) {
-                    console.error(`[InstanceIcon] Failed to load ${imgSource}`, e);
-                }
-            }
-            
-            if (isMounted) setSrc(newSrc);
-        };
-        
-        loadIcon();
-        return () => { isMounted = false; };
-    }, [instance.id, instance.icon, instance.backgroundImage, (instance as any).background_image]);
+        const cached = getCachedImages(instance.id);
+        if (cached.icon) setSrc(cached.icon);
+    }, [instance.id, instance.icon, instance.backgroundImage]);
 
     return (
         <div className={cn(
@@ -125,75 +59,33 @@ const Home: React.FC = () => {
 
     // Background Image State for Active Instance
     const [activeBgSrc, setActiveBgSrc] = useState<string>("");
+    
+    // Preloaded icon for settings modal
+    const [preloadedSettingsIcon, setPreloadedSettingsIcon] = useState<string>("");
 
     // Default to first if none selected
     const activeInstance = selectedInstance || instances[0];
-
+    
+    // Sync preloaded icon from cache when active instance changes
     useEffect(() => {
-        const loadBg = async () => {
-            if (!activeInstance) {
-                setActiveBgSrc("");
-                return;
-            }
-            
-            // Check if it's a predefined asset path (starts with assets/)
-            const bg = activeInstance.backgroundImage || (activeInstance as any).background_image;
-            
-            if (bg) {
-                // Check cache first
-                const cacheKey = `${activeInstance.id}-${bg}`;
-                if (bgCache.has(cacheKey)) {
-                    setActiveBgSrc(bgCache.get(cacheKey)!);
-                    return;
-                }
+        if (activeInstance) {
+            const cached = getCachedImages(activeInstance.id);
+            if (cached.icon) setPreloadedSettingsIcon(cached.icon);
+        }
+    }, [activeInstance?.id, activeInstance?.icon, activeInstance?.backgroundImage]);
 
-                if (bg.startsWith('assets/') || bg.startsWith('/assets/')) {
-                     // It's a predefined asset path, use directly
-                     setActiveBgSrc(bg.startsWith('/') ? bg : `/${bg}`);
-                } else if (BACKGROUNDS.includes(bg)) {
-                    setActiveBgSrc(`/assets/backgrounds/${bg}`);
-                } else if (bg.startsWith('http')) {
-                    // It IS a URL (legacy or error), load directly
-                    console.warn("Background is a URL, loading directly:", bg);
-                    setActiveBgSrc(bg);
-                } else {
-                    // Custom image
-                    try {
-                        const { invoke } = await import("@tauri-apps/api/core");
-                        const { join, isAbsolute } = await import("@tauri-apps/api/path");
-
-                        let fullPath = bg;
-                        // Robust absolute path check
-                        const isAbs = await isAbsolute(bg) || bg.includes(':\\') || bg.startsWith('/');
-                        
-                        if (!isAbs) {
-                             const instancePath = await invoke("get_instance_path", { id: activeInstance.id }) as string;
-                             fullPath = await join(instancePath, bg);
-                        }
-                        
-                        // Use read_binary_file for reliability
-                        const data = await invoke("read_binary_file", { path: fullPath }) as number[];
-                        const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
-                        const url = URL.createObjectURL(blob);
-                        
-                        // Cache it
-                        bgCache.set(cacheKey, url);
-                        setActiveBgSrc(url);
-                    } catch (e) {
-                        console.error("Failed to load custom background:", e);
-                        setActiveBgSrc(`/assets/backgrounds/${BACKGROUNDS[0]}`);
-                    }
-                }
-            } else {
-                setActiveBgSrc(`/assets/backgrounds/${BACKGROUNDS[0]}`);
-            }
-        };
-        loadBg();
-    }, [activeInstance]);
-
-
-
-
+    // Sync background from cache
+    useEffect(() => {
+        if (!activeInstance) {
+            setActiveBgSrc("");
+            return;
+        }
+        
+        const cached = getCachedImages(activeInstance.id);
+        if (cached.background) {
+            setActiveBgSrc(cached.background);
+        }
+    }, [activeInstance?.id, activeInstance?.backgroundImage]);
 
     // Porcos Metadata State
     const [porcosMetadata, setPorcosMetadata] = useState<any>(null);
@@ -1212,7 +1104,8 @@ const Home: React.FC = () => {
                     {showSettingsModal && (
                         <InstanceSettings 
                             instance={activeInstance} 
-                            onBack={() => setShowSettingsModal(false)} 
+                            onBack={() => setShowSettingsModal(false)}
+                            preloadedIconSrc={preloadedSettingsIcon}
                         />
                     )}
                 </AnimatePresence>

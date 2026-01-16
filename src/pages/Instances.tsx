@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle, Settings } from 'lucide-react';
-import { useLauncherStore, Instance } from '@/stores/launcherStore';
+import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 import styles from './Instances.module.css';
@@ -20,9 +20,6 @@ const BACKGROUNDS = [
     "556729.jpg", "556736.jpg", "557913.jpg", "558708.jpg", "733612.png"
 ];
 
-// Cache for background blobs to avoid re-reading files
-const bgCache = new Map<string, string>();
-
 interface InstanceCardProps {
     instance: Instance;
     index: number;
@@ -35,8 +32,10 @@ interface InstanceCardProps {
 }
 
 const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, onPlay, onDelete, onUpdate, onSettings, isLaunching }) => {
-    const [iconSrc, setIconSrc] = useState("https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
-    const [bgSrc, setBgSrc] = useState<string>(`/assets/thumbnails/${BACKGROUNDS[0]}`);
+    // Get cached images from global store
+    const cached = getCachedImages(instance.id);
+    const [iconSrc, setIconSrc] = useState(cached.icon || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
+    const [bgSrc, setBgSrc] = useState<string>(cached.thumbnail || `/assets/thumbnails/${BACKGROUNDS[0]}`);
     const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
 
     const handleVersionChange = async (version: string) => {
@@ -82,102 +81,12 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
         }
     };
 
+    // Sync with cached images when instance changes
     useEffect(() => {
-        let isMounted = true;
-
-        const loadImages = async () => {
-            const { invoke } = await import("@tauri-apps/api/core");
-            const { join, isAbsolute } = await import("@tauri-apps/api/path");
-            
-            // Load Icon
-            const iconSource = instance.icon || instance.backgroundImage || (instance as any).background_image;
-            if (iconSource) {
-                // Check cache first
-                const cacheKey = `${instance.id}-icon-${iconSource}`;
-                if (bgCache.has(cacheKey)) {
-                    if (isMounted) setIconSrc(bgCache.get(cacheKey)!);
-                } else {
-                    if (iconSource.startsWith('http')) {
-                        if (isMounted) setIconSrc(iconSource);
-                    } else if (iconSource.startsWith('assets/') || iconSource.startsWith('/assets/')) {
-                        if (isMounted) setIconSrc(iconSource.startsWith('/') ? iconSource : `/${iconSource}`);
-                    } else if (BACKGROUNDS.includes(iconSource)) {
-                        if (isMounted) setIconSrc(`/assets/thumbnails/${iconSource}`);
-                    } else {
-                        try {
-                            let fullPath = iconSource;
-                            const isAbs = await isAbsolute(iconSource) || iconSource.includes(':\\') || iconSource.startsWith('/');
-                            
-                            if (!isAbs) {
-                                const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
-                                fullPath = await join(instancePath, iconSource);
-                            }
-
-                            const data = await invoke("read_binary_file", { path: fullPath }) as number[];
-                            const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
-                            const url = URL.createObjectURL(blob);
-                            // iconObjUrl = url;
-                            bgCache.set(cacheKey, url);
-                            if (isMounted) setIconSrc(url);
-                        } catch (e) {
-                            console.error("Failed to load icon", e);
-                        }
-                    }
-                }
-            }
-
-            // Load Background
-            const bgSource = instance.backgroundImage || (instance as any).background_image;
-            if (bgSource) {
-                // Check cache first
-                const cacheKey = `${instance.id}-bg-${bgSource}`;
-                if (bgCache.has(cacheKey)) {
-                    if (isMounted) setBgSrc(bgCache.get(cacheKey)!);
-                } else {
-                    if (bgSource.startsWith('assets/') || bgSource.startsWith('/assets/')) {
-                        if (isMounted) setBgSrc(bgSource.startsWith('/') ? bgSource : `/${bgSource}`);
-                    } else if (BACKGROUNDS.includes(bgSource)) {
-                        if (isMounted) setBgSrc(`/assets/thumbnails/${bgSource}`);
-                    } else if (bgSource.startsWith('http')) {
-                        if (isMounted) setBgSrc(bgSource);
-                    } else {
-                        try {
-                            let fullPath = bgSource;
-                            const isAbs = await isAbsolute(bgSource) || bgSource.includes(':\\') || bgSource.startsWith('/');
-                            
-                            if (!isAbs) {
-                                const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
-                                fullPath = await join(instancePath, bgSource);
-                            }
-
-                            const data = await invoke("read_binary_file", { path: fullPath }) as number[];
-                            const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
-                            const url = URL.createObjectURL(blob);
-                            // bgObjUrl = url;
-                            bgCache.set(cacheKey, url);
-                            if (isMounted) setBgSrc(url);
-                        } catch (e) {
-                            console.error("Failed to load bg", e);
-                            // Fallback
-                            if (isMounted) setBgSrc(`/assets/thumbnails/${BACKGROUNDS[0]}`);
-                        }
-                    }
-                }
-            } else {
-                // Default random bg if none set, or just use the first one
-                if (isMounted) setBgSrc(`/assets/thumbnails/${BACKGROUNDS[0]}`);
-            }
-        };
-
-        loadImages();
-
-        return () => { 
-            isMounted = false; 
-            // Do not revoke URLs if we are caching them globally/module-level
-            // if (iconObjUrl) URL.revokeObjectURL(iconObjUrl);
-            // if (bgObjUrl) URL.revokeObjectURL(bgObjUrl);
-        };
-    }, [instance]);
+        const cached = getCachedImages(instance.id);
+        if (cached.icon) setIconSrc(cached.icon);
+        if (cached.thumbnail) setBgSrc(cached.thumbnail);
+    }, [instance.id, instance.icon, instance.backgroundImage]);
 
     return (
         <motion.div
@@ -502,16 +411,9 @@ const Instances: React.FC = () => {
         }
     };
 
-    if (viewingSettingsInstance) {
-        return (
-            <InstanceSettings 
-                instance={viewingSettingsInstance}
-                onBack={() => setViewingSettingsInstance(null)}
-            />
-        );
-    }
-
     if (viewingInstance) {
+        const settingsCachedImages = viewingSettingsInstance ? getCachedImages(viewingSettingsInstance.id) : null;
+        
         return (
             <>
                 <InstanceDetails 
@@ -521,6 +423,16 @@ const Instances: React.FC = () => {
                     onOpenSettings={() => setViewingSettingsInstance(viewingInstance)}
                     isLaunching={isLaunching}
                 />
+                {/* Settings Modal overlay */}
+                <AnimatePresence>
+                    {viewingSettingsInstance && (
+                        <InstanceSettings 
+                            instance={viewingSettingsInstance}
+                            onBack={() => setViewingSettingsInstance(null)}
+                            preloadedIconSrc={settingsCachedImages?.icon}
+                        />
+                    )}
+                </AnimatePresence>
             </>
         );
     }

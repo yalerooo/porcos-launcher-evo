@@ -329,9 +329,29 @@ export default function MainLayout({
 
       {/* Global Crash Report Modal */}
       {crashReport && (
-        <div className="fixed top-[56px] right-0 bottom-0 left-[65px] z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-8 rounded-tl-[30px]" onClick={() => setCrashReport(null)} data-modal-overlay="true">
-            <div className="w-full max-w-5xl h-[80vh] bg-[#18181b] border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-[#202023]">
+        <div 
+            className="fixed top-[56px] right-0 bottom-0 left-[65px] z-[100] flex items-center justify-center p-8 rounded-tl-[30px]" 
+            style={{
+                background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)'
+            }}
+            onClick={() => setCrashReport(null)} 
+            data-modal-overlay="true"
+        >
+            <div 
+                className="w-full max-w-5xl h-[80vh] rounded-3xl flex flex-col overflow-hidden relative"
+                style={{
+                    background: 'linear-gradient(145deg, rgba(30, 30, 35, 0.9) 0%, rgba(20, 20, 25, 0.95) 100%)',
+                    backdropFilter: 'blur(40px)',
+                    WebkitBackdropFilter: 'blur(40px)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.05), 0 20px 50px -10px rgba(0, 0, 0, 0.5), 0 0 100px -20px rgba(239, 68, 68, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-red-400/50 to-transparent"></div>
+                <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between" style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
                     <div className="flex items-center gap-2 text-red-400">
                         <AlertCircle className="w-5 h-5" />
                         <h3 className="text-lg font-semibold text-white">Game Crashed!</h3>
@@ -340,7 +360,7 @@ export default function MainLayout({
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="px-6 py-2 text-sm text-zinc-400 border-b border-white/5 bg-[#18181b]">
+                <div className="px-6 py-2 text-sm text-zinc-400 border-b border-white/5">
                     Report saved to: <span className="text-zinc-300 select-all">{crashReport.path}</span>
                 </div>
                 <style>{`
@@ -349,7 +369,7 @@ export default function MainLayout({
                         color: #ffbfba;
                     }
                 `}</style>
-                <pre className="flex-1 overflow-auto p-6 m-0 font-mono text-sm leading-relaxed text-zinc-300 whitespace-pre-wrap break-all select-text bg-[#18181b] crash-report-content">
+                <pre className="flex-1 overflow-auto p-6 m-0 font-mono text-sm leading-relaxed text-zinc-300 whitespace-pre-wrap break-all select-text crash-report-content">
                     {crashReport.content}
                 </pre>
             </div>

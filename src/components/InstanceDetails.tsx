@@ -1,23 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Play, Folder, ArrowLeft, Package, Map, Trash2, FileQuestion, Search, Download, Eye, X, FileText, Settings } from 'lucide-react';
-import { Instance } from '@/stores/launcherStore';
+import { Instance, getCachedImages } from '@/stores/launcherStore';
 import { cn } from '@/lib/utils';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { join } from '@tauri-apps/api/path';
 import styles from './InstanceDetails.module.css';
-
-const BACKGROUNDS = [
-    "1021170.png", "1102409.png", "1117616.jpg", "1117617.jpg", "1117618.jpg", "1117621.jpg", 
-    "1138899.png", "1168337.jpg", "1184187.jpg", "1186419.png", "1234635.png", "1240231.png", 
-    "1313226.png", "1313258.png", "1317021.png", "1317033.png", "1317036.png", "1321959.png", 
-    "1325278.jpeg", "1329100.png", "1333794.jpeg", "1333796.jpeg", "1333797.jpeg", "1353836.png", 
-    "1353838.png", "1363102.png", "1368460.png", "1370592.jpeg", "1374582.png", "1374585.png", 
-    "1377209.jpg", "1389013.png", "1391270.png", "1394736.png", "1394737.png", "377757.jpg", 
-    "473168.jpg", "556713.png", "556719.jpg", "556720.jpg", "556722.jpg", "556724.jpg", 
-    "556729.jpg", "556736.jpg", "557913.jpg", "558708.jpg", "733612.png"
-];
 
 interface InstanceDetailsProps {
     instance: Instance;
@@ -168,10 +157,13 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
 };
 
 const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onPlay, onOpenSettings, isLaunching }) => {
+    // Get cached images from global store
+    const cached = getCachedImages(instance.id);
     const [activeTab, setActiveTab] = React.useState<Tab>('Content');
     const [files, setFiles] = React.useState<{name: string, is_dir: boolean}[]>([]);
     const [loadingFiles, setLoadingFiles] = React.useState(false);
-    const [imageSrc, setImageSrc] = React.useState("https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
+    const [imageSrc, setImageSrc] = React.useState(cached.background || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
+    const [iconSrc, setIconSrc] = React.useState(cached.icon || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
     const [instancePath, setInstancePath] = React.useState<string>("");
     const [selectedScreenshot, setSelectedScreenshot] = React.useState<string | null>(null);
     const [selectedLog, setSelectedLog] = React.useState<{name: string, content: string} | null>(null);
@@ -247,45 +239,12 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
         }
     };
 
+    // Sync with cached images when instance changes
     React.useEffect(() => {
-        let isMounted = true;
-        let objectUrl: string | null = null;
-
-        const loadImage = async () => {
-            const imgSource = instance.icon || instance.backgroundImage || (instance as any).background_image;
-            if (!imgSource) return;
-
-            let src = "";
-            if (imgSource.startsWith('assets/') || imgSource.startsWith('/assets/')) {
-                src = imgSource.startsWith('/') ? imgSource : `/${imgSource}`;
-            } else if (BACKGROUNDS.includes(imgSource)) {
-                src = `/assets/thumbnails/${imgSource}`;
-            } else if (imgSource.startsWith('http')) {
-                src = imgSource;
-            } else {
-                try {
-                    const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
-                    const fullPath = await join(instancePath, imgSource);
-                    
-                    const data = await invoke("read_binary_file", { path: fullPath }) as number[];
-                    const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
-                    src = URL.createObjectURL(blob);
-                    objectUrl = src;
-                } catch (e) {
-                    console.error("Failed to load image for instance " + instance.name, e);
-                }
-            }
-            
-            if (isMounted && src) {
-                setImageSrc(src);
-            }
-        };
-        loadImage();
-        return () => { 
-            isMounted = false; 
-            if (objectUrl) URL.revokeObjectURL(objectUrl);
-        };
-    }, [instance]);
+        const cached = getCachedImages(instance.id);
+        if (cached.background) setImageSrc(cached.background);
+        if (cached.icon) setIconSrc(cached.icon);
+    }, [instance.id, instance.icon, instance.backgroundImage]);
 
     const tabs: Tab[] = ['Content', 'Logs', 'Saves', 'Screenshots', 'Console'];
 
@@ -378,7 +337,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
 
                 <div className={styles.instanceInfo}>
                     <div className={styles.instanceIconWrapper}>
-                        <img src={imageSrc} className={styles.instanceIcon} alt={instance.name} />
+                        <img src={iconSrc} className={styles.instanceIcon} alt={instance.name} />
                     </div>
                     <div className={styles.instanceMeta}>
                         <h1 className={styles.instanceTitle}>{instance.name}</h1>
