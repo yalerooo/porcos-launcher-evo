@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 import styles from '../pages/Home.module.css';
 import { useLauncherStore } from '@/stores/launcherStore';
 import { listen } from '@tauri-apps/api/event';
-import UpdateChecker from '@/components/UpdateChecker';
 import { useI18n } from '@/i18n';
 
 interface MainLayoutProps {
@@ -378,9 +377,6 @@ export default function MainLayout({
             </div>
         </div>
       )}
-
-      {/* Update Checker */}
-      <UpdateChecker />
     </div>
   );
 }

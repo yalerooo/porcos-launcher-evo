@@ -3,6 +3,8 @@ import { Settings as SettingsIcon, Cpu, Globe } from 'lucide-react';
 import { useLauncherStore } from '@/stores/launcherStore';
 import { SettingsPage, SettingsSection, SettingsCard } from '@/components/SettingsLayout';
 import { useI18n } from '@/i18n';
+import flagEn from '@/assets/flags/en.png';
+import flagEs from '@/assets/flags/es.png';
 import styles from './Settings.module.css';
 
 const Settings: React.FC = () => {
@@ -32,13 +34,15 @@ const Settings: React.FC = () => {
                                 onClick={() => setLanguage('en')}
                                 className={`${styles.langButton} ${language === 'en' ? styles.langButtonActive : ''}`}
                             >
-                                🇺🇸 {t('english')}
+                                <img src={flagEn} alt="EN" className={styles.flagIcon} />
+                                {t('english')}
                             </button>
                             <button
                                 onClick={() => setLanguage('es')}
                                 className={`${styles.langButton} ${language === 'es' ? styles.langButtonActive : ''}`}
                             >
-                                🇪🇸 {t('spanish')}
+                                <img src={flagEs} alt="ES" className={styles.flagIcon} />
+                                {t('spanish')}
                             </button>
                         </div>
                     </div>

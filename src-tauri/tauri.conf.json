@@ -26,12 +26,12 @@
       {
         "label": "splashscreen",
         "url": "/splashscreen.html",
-        "width": 400,
-        "height": 400,
+        "width": 420,
+        "height": 520,
         "decorations": false,
         "transparent": true,
         "center": true,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "resizable": false,
         "shadow": false
       }

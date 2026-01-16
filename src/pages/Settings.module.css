@@ -187,3 +187,10 @@
     border-color: rgba(255, 191, 186, 0.4);
     color: #ffbfba;
 }
+
+.flagIcon {
+    width: 24px;
+    height: 16px;
+    object-fit: cover;
+    border-radius: 2px;
+}
