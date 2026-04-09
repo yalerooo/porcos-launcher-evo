@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Settings, Plus, Check, Play, Gamepad2, ChevronDown, Package, Download, AlertCircle } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
+import { parseVersion } from '@/lib/versionParser';
 
 
 import styles from './Home.module.css';
@@ -66,6 +67,8 @@ const Home: React.FC = () => {
     
     // Preloaded icon for settings modal
     const [preloadedSettingsIcon, setPreloadedSettingsIcon] = useState<string>("");
+    
+    const maxProgressRef = useRef(0);
 
     // Default to first if none selected
     const activeInstance = selectedInstance || instances[0];
@@ -388,14 +391,14 @@ const Home: React.FC = () => {
         if (!activeInstance) return;
 
         // Check if it's a complex version
-        const complexVersionMatch = version.match(/^(.*) \((.*) (.*)\)$/);
+        const parsed = parseVersion(version);
         let newModLoader = activeInstance.modLoader;
         let newModLoaderVersion = activeInstance.modLoaderVersion;
 
-        if (complexVersionMatch) {
+        if (parsed.loader) {
             // It's a complex version, update global state to match
-            newModLoader = complexVersionMatch[2];
-            newModLoaderVersion = complexVersionMatch[3];
+            newModLoader = parsed.loader;
+            newModLoaderVersion = parsed.loaderVersion;
         } else {
             // It's a simple version.
             
@@ -566,29 +569,29 @@ const Home: React.FC = () => {
                 const unlistenLaunch = await listen('launch-progress', (event: any) => {
                     const { stage, progress } = event.payload;
                     setLaunchStage(stage);
-                    setLaunchProgress(progress);
+                    
+                    // Never let progress go backwards
+                    if (progress >= maxProgressRef.current) {
+                        maxProgressRef.current = progress;
+                        setLaunchProgress(progress);
+                    }
                     
                     // If progress is 100% and stage indicates game started, we can hide the bar after a delay
                     if (progress === 100 && (stage.includes("Juego iniciado") || stage.includes("Game"))) {
-                        setTimeout(() => setIsLaunching(false), 2000);
+                        setTimeout(() => {
+                            setIsLaunching(false);
+                            maxProgressRef.current = 0;
+                        }, 2000);
                     }
                 });
                 unlisteners.push(unlistenLaunch);
 
                 const unlistenDownload = await listen('download-progress', (event: any) => {
                     const { id, progress } = event.payload;
-                    if (id === 'java-download-8') {
+                    if (id && id.startsWith('java-download-')) {
+                        const javaVer = id.replace('java-download-', '');
                         setLaunchProgress(progress);
-                        setLaunchStage(t('downloadingJava', { version: '8', progress: Math.round(progress) }));
-                    } else if (id === 'java-download-16') {
-                        setLaunchProgress(progress);
-                        setLaunchStage(t('downloadingJava', { version: '16', progress: Math.round(progress) }));
-                    } else if (id === 'java-download-17') {
-                        setLaunchProgress(progress);
-                        setLaunchStage(t('downloadingJava', { version: '17', progress: Math.round(progress) }));
-                    } else if (id === 'java-download-21') {
-                        setLaunchProgress(progress);
-                        setLaunchStage(t('downloadingJava', { version: '21', progress: Math.round(progress) }));
+                        setLaunchStage(t('downloadingJava', { version: javaVer, progress: Math.round(progress) }));
                     }
                 });
                 unlisteners.push(unlistenDownload);
@@ -615,6 +618,7 @@ const Home: React.FC = () => {
         setLaunchStartTime(Date.now());
         setLaunchStage(t('preparing'));
         setLaunchProgress(0);
+        maxProgressRef.current = 0;
 
         // Check for Porcos updates
         try {
@@ -713,15 +717,12 @@ const Home: React.FC = () => {
 
         // Parse version string for Mod Loader info
         // Format: "1.20.1" or "1.20.1 (Fabric 0.14.22)"
-        let versionToPlay = versionString;
-        let loaderToUse = instance.modLoader;
-        let loaderVersionToUse = instance.modLoaderVersion;
+        const parsedLaunch = parseVersion(versionString);
+        let versionToPlay = parsedLaunch.mcVersion;
+        let loaderToUse = parsedLaunch.loader || instance.modLoader;
+        let loaderVersionToUse = parsedLaunch.loaderVersion || instance.modLoaderVersion;
 
-        const complexVersionMatch = versionString.match(/^(.*) \((.*) (.*)\)$/);
-        if (complexVersionMatch) {
-            versionToPlay = complexVersionMatch[1];
-            loaderToUse = complexVersionMatch[2];
-            loaderVersionToUse = complexVersionMatch[3];
+        if (parsedLaunch.loader) {
             console.log(`[Launch] Detected complex version: MC=${versionToPlay}, Loader=${loaderToUse}, Ver=${loaderVersionToUse}`);
         } else {
             // If it's a simple version string (e.g. "1.20.1"), we should check if the global modLoader matches the current intent.
@@ -743,68 +744,67 @@ const Home: React.FC = () => {
             const instancePath = await invoke("get_instance_path", { id: instance.id });
             addLog(`Instance path: ${instancePath}`);
 
-            // Determine Java version based on Minecraft version
-            const versionParts = versionToPlay.split('.');
-            let minor = 0;
-            let patch = 0;
-            if (versionParts.length >= 2) minor = parseInt(versionParts[1]);
-            if (versionParts.length >= 3) patch = parseInt(versionParts[2]);
+            // Determine Java version from Mojang's version manifest
+            setLaunchStage(t('checkingJavaVersion') || 'Checking required Java version...');
+            let requiredJavaMajor: number;
+            try {
+                requiredJavaMajor = await invoke('get_required_java_version', { version: versionToPlay }) as number;
+                addLog(`Mojang manifest requires Java ${requiredJavaMajor} for MC ${versionToPlay}`);
+            } catch (e) {
+                addLog(`Failed to get Java version from manifest, falling back to hardcoded mapping: ${e}`);
+                // Fallback to hardcoded mapping if manifest fetch fails
+                const versionParts = versionToPlay.split('.');
+                const major = parseInt(versionParts[0]);
+                let minor = 0;
+                let patch = 0;
+                if (versionParts.length >= 2) minor = parseInt(versionParts[1]);
+                if (versionParts.length >= 3) patch = parseInt(versionParts[2]);
+
+                if (major >= 2) {
+                    requiredJavaMajor = 25;
+                } else if (minor <= 16) {
+                    requiredJavaMajor = 8;
+                } else if (minor === 17) {
+                    requiredJavaMajor = 16;
+                } else if (minor >= 18 && minor <= 20) {
+                    requiredJavaMajor = (minor === 20 && patch >= 5) ? 21 : 17;
+                } else {
+                    requiredJavaMajor = 21;
+                }
+            }
 
             const appData = await appDataDir();
             const roamingDir = await join(appData, '..');
             const porcosDir = await join(roamingDir, '.porcos');
             const runtimeDir = await join(porcosDir, 'runtime');
             
-            let javaDirName = '';
-            let javaUrl = '';
-            let javaZipName = '';
-            let javaId = '';
-            let javaLabel = '';
+            const javaLabel = `Java ${requiredJavaMajor}`;
+            const javaId = `java-download-${requiredJavaMajor}`;
+            const javaZipName = `java${requiredJavaMajor}.zip`;
 
-            if (minor <= 16) {
-                // <= 1.16.5 -> JDK 8
-                javaDirName = 'jdk-8u461';
-                javaUrl = "https://github.com/yalerooo/myApis/releases/download/jdk/jdk-8u461-windows-x64.zip";
-                javaZipName = "java8.zip";
-                javaId = 'java-download-8';
-                javaLabel = 'Java 8';
-            } else if (minor === 17) {
-                // 1.17.x -> JDK 16
-                javaDirName = 'jdk-16.0.2';
-                javaUrl = "https://download.oracle.com/otn/java/jdk/16.0.2%2B7/d4a915d82b4c4fbb9bde534da945d746/jdk-16.0.2_windows-x64_bin.zip";
-                javaZipName = "java16.zip";
-                javaId = 'java-download-16';
-                javaLabel = 'Java 16';
-            } else if (minor >= 18 && minor <= 20) {
-                // 1.18 - 1.20.4 -> JDK 17
-                if (minor === 20 && patch >= 5) {
-                    // >= 1.20.5 -> JDK 21
-                    javaDirName = 'jdk-21.0.8';
-                    javaUrl = "https://download.oracle.com/java/21/archive/jdk-21.0.8_windows-x64_bin.zip";
-                    javaZipName = "java21.zip";
-                    javaId = 'java-download-21';
-                    javaLabel = 'Java 21';
-                } else {
-                    // 1.18 - 1.20.4 -> JDK 17
-                    javaDirName = 'jdk-17.0.12';
-                    javaUrl = "https://download.oracle.com/java/17/archive/jdk-17.0.12_windows-x64_bin.zip";
-                    javaZipName = "java17.zip";
-                    javaId = 'java-download-17';
-                    javaLabel = 'Java 17';
+            // Use Adoptium Temurin API for dynamic Java downloads
+            const javaUrl = `https://api.adoptium.net/v3/binary/latest/${requiredJavaMajor}/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk`;
+
+            // Find any existing JDK directory for this major version
+            let javaDirName = '';
+            let javaPath = '';
+            try {
+                const runtimeFiles = await invoke('list_files', { path: runtimeDir }) as { name: string, is_dir: boolean }[];
+                const jdkDir = runtimeFiles.find(f => f.is_dir && f.name.startsWith(`jdk-${requiredJavaMajor}`));
+                if (jdkDir) {
+                    javaDirName = jdkDir.name;
+                    javaPath = await join(runtimeDir, javaDirName, 'bin', 'java.exe');
+                    if (!await invoke('file_exists', { path: javaPath })) {
+                        javaDirName = '';
+                        javaPath = '';
+                    }
                 }
-            } else {
-                // >= 1.21 -> JDK 21
-                javaDirName = 'jdk-21.0.8';
-                javaUrl = "https://download.oracle.com/java/21/archive/jdk-21.0.8_windows-x64_bin.zip";
-                javaZipName = "java21.zip";
-                javaId = 'java-download-21';
-                javaLabel = 'Java 21';
+            } catch {
+                // runtime dir may not exist yet
             }
 
-            const javaPath = await join(runtimeDir, javaDirName, 'bin', 'java.exe');
-
-            if (!await invoke('file_exists', { path: javaPath })) {
-                addLog(`${javaLabel} not found. Downloading...`);
+            if (!javaPath) {
+                addLog(`${javaLabel} not found. Downloading from Adoptium...`);
                 setLaunchStage(t('downloadingJavaLabel', { label: javaLabel }));
                 setLaunchProgress(0);
                 
@@ -819,7 +819,18 @@ const Home: React.FC = () => {
                 setLaunchStage(t('extractingJava', { label: javaLabel }));
                 await invoke('extract_zip', { zipPath, targetDir: runtimeDir });
                 await invoke('delete_file', { path: zipPath });
-                addLog(`${javaLabel} installed successfully.`);
+
+                // Find the extracted directory name (e.g., jdk-25.0.1+9)
+                const runtimeFiles = await invoke('list_files', { path: runtimeDir }) as { name: string, is_dir: boolean }[];
+                const jdkDir = runtimeFiles.find(f => f.is_dir && f.name.startsWith(`jdk-${requiredJavaMajor}`));
+                if (jdkDir) {
+                    javaDirName = jdkDir.name;
+                    javaPath = await join(runtimeDir, javaDirName, 'bin', 'java.exe');
+                } else {
+                    throw new Error(`Failed to find extracted JDK directory for Java ${requiredJavaMajor}`);
+                }
+
+                addLog(`${javaLabel} installed successfully at ${javaDirName}.`);
             }
 
             // Generate offline UUID if needed

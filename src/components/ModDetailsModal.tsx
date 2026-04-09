@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { cn } from '@/lib/utils';
+import { CURSEFORGE_HEADERS } from '@/lib/constants';
 import styles from './ModDetailsModal.module.css';
 
 interface ModDetailsModalProps {
@@ -60,10 +61,7 @@ const ModDetailsModal: React.FC<ModDetailsModalProps> = ({
                 const url = `https://api.curseforge.com/v1/mods/${item.id}/description`;
                 const responseText = await invoke('fetch_cors', { 
                     url,
-                    headers: {
-                        'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                        'Accept': 'application/json'
-                    }
+                    headers: CURSEFORGE_HEADERS
                 }) as string;
                 
                 try {

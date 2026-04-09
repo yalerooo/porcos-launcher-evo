@@ -12,7 +12,7 @@ const Console: React.FC = () => {
 
     React.useEffect(() => {
         if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
         }
     }, [consoleOutput]);
 

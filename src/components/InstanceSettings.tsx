@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useLauncherStore } from "@/stores/launcherStore";
+import { parseVersion, getLoaderDisplay } from "@/lib/versionParser";
 import { useI18n } from "@/i18n";
 import {
     X,
@@ -358,15 +359,8 @@ export default function InstanceSettings({ instance, onBack, onUpdate, onDelete,
         setTimeout(() => setToast(null), 3000);
     };
 
-    const getMcVersion = (v: string) => v.split('-')[0];
-    const hasLoader = (v: string) => v.includes('-') && v.split('-').length >= 3;
-    const getLoaderDisplay = (v: string) => {
-        const parts = v.split('-');
-        if (parts.length >= 3) {
-            return `${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)} ${parts.slice(2).join('-')}`;
-        }
-        return "Vanilla";
-    };
+    const getMcVersion = (v: string) => parseVersion(v).mcVersion;
+    const hasLoader = (v: string) => !!parseVersion(v).loader;
 
     const versions = info.versions || [info.version];
 

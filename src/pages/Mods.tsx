@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Download, Loader2, Filter, Box, Package, ChevronDown, Plus, Gamepad2, Cpu, Check, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Search, Download, Loader2, Filter, Box, Package, ChevronDown, Plus, Gamepad2, Cpu, Check, RefreshCw, ShieldCheck, Trash2, Power } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
@@ -8,34 +8,17 @@ import { cn } from '@/lib/utils';
 import ModpackInstallModal from '@/components/ModpackInstallModal';
 import ModInstallSuccessModal from '@/components/ModInstallSuccessModal';
 import ModDetailsView from '@/components/ModDetailsView';
+import ConfirmModal from '@/components/ConfirmModal';
+import DependencySelectModal, { type DependencyItem } from '@/components/DependencySelectModal';
 import { useI18n } from '@/i18n';
+import { useModSearch, CATEGORIES, type ModSource, type SearchType } from '@/hooks/useModSearch';
+import { useInstalledMods } from '@/hooks/useInstalledMods';
+import { useModInstall } from '@/hooks/useModInstall';
+import { useModUpdates } from '@/hooks/useModUpdates';
 
 // Force refresh check
 console.log("Mods Page Loaded - Timestamp:", Date.now());
 import styles from './Mods.module.css';
-
-type ModSource = 'modrinth' | 'curseforge' | 'porcos';
-type SearchType = 'mods' | 'modpacks' | 'updates';
-
-const CATEGORIES = [
-    { id: "adventure", nameKey: "catAdventure", cfId: 406 },
-    { id: "decoration", nameKey: "catDecoration", cfId: 420 },
-    { id: "equipment", nameKey: "catEquipment", cfId: 434 },
-    { id: "food", nameKey: "catFood", cfId: 411 },
-    { id: "game-mechanics", nameKey: "catGameMechanics", cfId: 416 },
-    { id: "library", nameKey: "catLibrary", cfId: 421 },
-    { id: "magic", nameKey: "catMagic", cfId: 419 },
-    { id: "management", nameKey: "catManagement", cfId: 408 },
-    { id: "minigame", nameKey: "catMinigame", cfId: 430 },
-    { id: "mobs", nameKey: "catMobs", cfId: 414 },
-    { id: "optimization", nameKey: "catOptimization", cfId: 427 },
-    { id: "social", nameKey: "catSocial", cfId: 428 },
-    { id: "storage", nameKey: "catStorage", cfId: 423 },
-    { id: "technology", nameKey: "catTechnology", cfId: 412 },
-    { id: "transportation", nameKey: "catTransportation", cfId: 415 },
-    { id: "utility", nameKey: "catUtility", cfId: 426 },
-    { id: "world-generation", nameKey: "catWorldGeneration", cfId: 409 },
-];
 
 const InstanceDropdownIcon = ({ instance }: { instance: any }) => {
     const [src, setSrc] = useState<string>("");
@@ -56,7 +39,6 @@ const InstanceDropdownIcon = ({ instance }: { instance: any }) => {
             } else if (imgSource.startsWith('assets/') || imgSource.startsWith('/assets/')) {
                 newSrc = imgSource.startsWith('/') ? imgSource : `/${imgSource}`;
             } else {
-                // Custom file
                 try {
                     const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
                     const fullPath = await join(instancePath, imgSource);
@@ -80,13 +62,6 @@ const InstanceDropdownIcon = ({ instance }: { instance: any }) => {
 
     return <img src={src} className="w-4 h-4 rounded-sm object-cover" />;
 };
-
-interface InstalledMod {
-    file: string;
-    version?: string;
-    source?: string;
-    versionId?: string;
-}
 
 interface FilterDropdownProps {
     value: string;
@@ -167,37 +142,152 @@ const Mods: React.FC = () => {
     const [activeSource, setActiveSource] = useState<ModSource>('modrinth');
     const [searchType, setSearchType] = useState<SearchType>('mods');
     const [targetInstanceId, setTargetInstanceId] = useState<string>(selectedInstance?.id || instances[0]?.id || '');
-    const [isLoading, setIsLoading] = useState(false);
-    
-    // Modpack Modal State
-    const [selectedModpack, setSelectedModpack] = useState<any>(null);
-    const [showModpackModal, setShowModpackModal] = useState(false);
-
-    // Mod Success Modal State
-    const [showSuccessModal, setShowSuccessModal] = useState(false);
-    const [installedModName, setInstalledModName] = useState('');
-
-    // Mod Details Modal State
-    const [selectedItem, setSelectedItem] = useState<any>(null);
     
     // Filters
     const [filterVersion, setFilterVersion] = useState<string>('');
     const [filterLoader, setFilterLoader] = useState<string>('');
     const [filterCategory, setFilterCategory] = useState<string>('');
     const [page, setPage] = useState(0);
-    const [totalHits, setTotalHits] = useState(0);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [installedMods, setInstalledMods] = useState<Map<string, InstalledMod>>(new Map());
-    const [installedSlugs, setInstalledSlugs] = useState<Map<string, InstalledMod>>(new Map());
-    const [updatesAvailable, setUpdatesAvailable] = useState<Map<string, boolean>>(new Map());
-    const [installingModId, setInstallingModId] = useState<string | null>(null);
-    const [installedDependencies, setInstalledDependencies] = useState<any[]>([]);
-    const [isUpdatingAll, setIsUpdatingAll] = useState(false);
-    const [availableVersions, setAvailableVersions] = useState<any[]>([]);
-    const currentDataRequestId = useRef(0);
-    const currentUpdateRequestId = useRef(0);
 
-    const [verificationStatus, setVerificationStatus] = useState<string>('');
+    // Mod Details
+    const [selectedItem, setSelectedItem] = useState<any>(null);
+    const [availableVersions, setAvailableVersions] = useState<any[]>([]);
+
+    // Elevated state shared between hooks
+    const [updatesAvailable, setUpdatesAvailable] = useState<Map<string, boolean>>(new Map());
+
+    // Confirm modal state
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        confirmText?: string;
+        danger?: boolean;
+        onConfirm: () => void;
+    }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+    const confirmResolveRef = useRef<((val: boolean) => void) | null>(null);
+
+    const showConfirmAsync = (opts: { title: string; message: string; confirmText?: string; danger?: boolean }): Promise<boolean> => {
+        return new Promise((resolve) => {
+            confirmResolveRef.current = resolve;
+            setConfirmModal({
+                isOpen: true,
+                ...opts,
+                onConfirm: () => {
+                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                    resolve(true);
+                    confirmResolveRef.current = null;
+                },
+            });
+        });
+    };
+
+    const handleConfirmCancel = () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        if (confirmResolveRef.current) {
+            confirmResolveRef.current(false);
+            confirmResolveRef.current = null;
+        }
+    };
+
+    // Dependency select modal state
+    const [depSelectModal, setDepSelectModal] = useState<{
+        isOpen: boolean;
+        dependencies: DependencyItem[];
+    }>({ isOpen: false, dependencies: [] });
+    const depSelectResolveRef = useRef<((val: string[]) => void) | null>(null);
+
+    const showDependencySelectAsync = (deps: DependencyItem[]): Promise<string[]> => {
+        return new Promise((resolve) => {
+            depSelectResolveRef.current = resolve;
+            setDepSelectModal({ isOpen: true, dependencies: deps });
+        });
+    };
+
+    const handleDepSelectConfirm = (selectedIds: string[]) => {
+        setDepSelectModal(prev => ({ ...prev, isOpen: false }));
+        if (depSelectResolveRef.current) {
+            depSelectResolveRef.current(selectedIds);
+            depSelectResolveRef.current = null;
+        }
+    };
+
+    const handleDepSelectCancel = () => {
+        setDepSelectModal(prev => ({ ...prev, isOpen: false }));
+        if (depSelectResolveRef.current) {
+            depSelectResolveRef.current([]);
+            depSelectResolveRef.current = null;
+        }
+    };
+
+    // ─── Hooks ─────────────────────────────────────────────────────
+
+    const {
+        installedMods, setInstalledMods,
+        installedSlugs, setInstalledSlugs,
+        isLoadingMods,
+        saveInstalledMod,
+    } = useInstalledMods(targetInstanceId);
+
+    const {
+        installingModId,
+        verificationStatus, setVerificationStatus,
+        showSuccessModal, setShowSuccessModal,
+        installedModName,
+        installedDependencies,
+        selectedModpack,
+        showModpackModal, setShowModpackModal,
+        handleInstall,
+        handleUninstall,
+        handleToggleMod,
+        installModrinth,
+        installCurseForge,
+    } = useModInstall({
+        targetInstanceId,
+        filterVersion,
+        filterLoader,
+        searchType,
+        installedMods,
+        installedSlugs,
+        saveInstalledMod,
+        setInstalledMods,
+        setInstalledSlugs,
+        setUpdatesAvailable,
+        showConfirmAsync,
+    });
+
+    const { items, isLoading, totalHits } = useModSearch({
+        activeSource,
+        searchType,
+        searchQuery,
+        filterVersion,
+        filterLoader,
+        filterCategory,
+        page,
+        installingModId,
+        installedMods,
+    });
+
+    const { isUpdatingAll, handleUpdateAll, verifyDependencies } = useModUpdates({
+        items,
+        installedMods,
+        installedSlugs,
+        filterVersion,
+        filterLoader,
+        targetInstanceId,
+        updatesAvailable,
+        setUpdatesAvailable,
+        handleInstall,
+        installModrinth,
+        installCurseForge,
+        setVerificationStatus,
+        showConfirmAsync,
+        showDependencySelectAsync,
+        setTargetInstanceId,
+    });
+
+    // ─── Effects ───────────────────────────────────────────────────
 
     useEffect(() => {
         const fetchVersions = async () => {
@@ -211,278 +301,11 @@ const Mods: React.FC = () => {
         fetchVersions();
     }, []);
 
-    // Clear state when switching instances to prevent stale data
-    useEffect(() => {
-        setItems([]);
-        setUpdatesAvailable(new Map());
-        setInstalledMods(new Map());
-        setInstalledSlugs(new Map());
-    }, [targetInstanceId]);
-
-    // Mock data
-    const [items, setItems] = useState<any[]>([]);
-
-    // Ensure we have a valid target instance
     useEffect(() => {
         if (!targetInstanceId && instances.length > 0) {
             setTargetInstanceId(instances[0].id);
         }
     }, [instances, targetInstanceId]);
-
-    // Helper for chunked processing
-    const processInChunks = async <T, R>(
-        items: T[],
-        chunkSize: number,
-        iterator: (item: T) => Promise<R>
-    ): Promise<R[]> => {
-        const results: R[] = [];
-        for (let i = 0; i < items.length; i += chunkSize) {
-            const chunk = items.slice(i, i + chunkSize);
-            const chunkResults = await Promise.all(chunk.map(iterator));
-            results.push(...chunkResults);
-        }
-        return results;
-    };
-
-    // Check for updates on visible items
-    useEffect(() => {
-        const checkUpdates = async () => {
-            if (!filterVersion) return;
-
-            const requestId = ++currentUpdateRequestId.current;
-            
-            // Process updates in chunks to avoid rate limits
-            await processInChunks(items, 5, async (item) => {
-                if (currentUpdateRequestId.current !== requestId) return;
-
-                // Check if installed
-                let installed = installedMods.get(item.id);
-                if (!installed && item.original?.slug) {
-                    installed = installedSlugs.get(item.original.slug.toLowerCase());
-                }
-
-                if (installed) {
-                    try {
-                        let needsUpdate = false;
-
-                        if (item.source === 'modrinth') {
-                            // Fetch compatible versions
-                            let loadersList = [];
-                            if (filterLoader) {
-                                const l = filterLoader.toLowerCase();
-                                loadersList.push(l);
-                                if (l === 'quilt') loadersList.push('fabric'); // Quilt runs Fabric
-                                if (l === 'neoforge') loadersList.push('forge'); // NeoForge often runs Forge
-                            }
-                            
-                            const loaders = loadersList.length > 0 ? JSON.stringify(loadersList) : '[]';
-                            const versions = `["${filterVersion}"]`;
-                            const url = `https://api.modrinth.com/v2/project/${item.id}/version?loaders=${encodeURIComponent(loaders)}&game_versions=${encodeURIComponent(versions)}`;
-                            
-                            const responseText = await invoke('fetch_cors', { url }) as string;
-                            const data = JSON.parse(responseText);
-                            
-                            if (data && data.length > 0) {
-                                const latest = data[0];
-                                
-                                // Check Version ID if available (most accurate)
-                                if ((installed as any).versionId && latest.id === (installed as any).versionId) {
-                                     // Match
-                                } else {
-                                    // Check if filename matches (strongest check)
-                                    const isFileMatch = latest.files.some((f: any) => f.filename === installed.file);
-                                    const isVersionMatch = latest.version_number === installed.version;
-
-                                    // Only update if NEITHER file nor version matches
-                                    if (!isFileMatch && !isVersionMatch) {
-                                        needsUpdate = true;
-                                    }
-                                }
-                            }
-                        } else if (item.source === 'curseforge') {
-                            // Check latestFiles from original item
-                            const mod = item.original;
-                            if (mod.latestFiles) {
-                                const compatibleFile = mod.latestFiles.find((f: any) => {
-                                    const hasVersion = f.gameVersions.includes(filterVersion);
-                                    let hasLoader = true;
-                                    if (filterLoader) {
-                                        const loaderName = filterLoader.toLowerCase();
-                                        hasLoader = f.gameVersions.some((gv: string) => gv.toLowerCase() === loaderName);
-                                    }
-                                    return hasVersion && hasLoader;
-                                });
-
-                                if (compatibleFile) {
-                                    // Check Version ID (File ID)
-                                    if ((installed as any).versionId && compatibleFile.id.toString() === (installed as any).versionId) {
-                                        // Match
-                                    } else {
-                                        // Compare filename as we might not have version string in installedMod for CF sometimes
-                                        // But installed.file should be accurate
-                                        const isFileMatch = compatibleFile.fileName === installed.file;
-                                        const isVersionMatch = installed.version && compatibleFile.displayName === installed.version;
-
-                                        if (!isFileMatch && !isVersionMatch) {
-                                            needsUpdate = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        setUpdatesAvailable(prev => {
-                            const newMap = new Map(prev);
-                            if (needsUpdate) {
-                                newMap.set(item.id, true);
-                            } else {
-                                newMap.delete(item.id);
-                            }
-                            return newMap;
-                        });
-                    } catch (e) {
-                        console.error("Failed to check update for", item.name, e);
-                    }
-                }
-            });
-        };
-
-        if (items.length > 0) {
-            checkUpdates();
-        }
-    }, [items, installedMods, installedSlugs, filterVersion, filterLoader]);
-
-    // Load installed mods
-    useEffect(() => {
-        const loadInstalled = async () => {
-            if (!targetInstanceId) return;
-            const newInstalledMods = new Map<string, InstalledMod>();
-            const newInstalledSlugs = new Map<string, InstalledMod>();
-
-            try {
-                const instancePath = await invoke('get_instance_path', { id: targetInstanceId }) as string;
-                
-                // 1. Read mods.json
-                const modsJsonPath = await join(instancePath, 'mods.json');
-                const exists = await invoke('file_exists', { path: modsJsonPath }) as boolean;
-                if (exists) {
-                    const content = await invoke('read_text_file', { path: modsJsonPath }) as string;
-                    const data = JSON.parse(content);
-                    if (data.mods && Array.isArray(data.mods)) {
-                        data.mods.forEach((m: any) => {
-                            newInstalledMods.set(m.id, { 
-                                file: m.file, 
-                                version: m.version, 
-                                source: m.source,
-                                versionId: m.versionId 
-                            });
-                        });
-                    }
-                }
-
-                // 2. Scan mods folder
-                const modsDir = await join(instancePath, 'mods');
-                const modsDirExists = await invoke('file_exists', { path: modsDir }) as boolean;
-                
-                if (modsDirExists) {
-                    const files = await invoke('list_files', { path: modsDir }) as any[];
-                    const jarFiles = files.filter(f => f.name.endsWith('.jar'));
-                    
-                    // Process in parallel chunks
-                    const chunkSize = 5;
-                    for (let i = 0; i < jarFiles.length; i += chunkSize) {
-                        const chunk = jarFiles.slice(i, i + chunkSize);
-                        await Promise.all(chunk.map(async (file) => {
-                            try {
-                                const fullPath = await join(modsDir, file.name);
-                                const metadata = await invoke('get_mod_metadata', { path: fullPath }) as any;
-                                
-                                let modId = metadata.id;
-                                
-                                // Fallback: Guess ID from filename if metadata is missing
-                                if (!modId) {
-                                    // Matches "name-version.jar" or "name-1.0.0.jar"
-                                    // Tries to grab everything before the first digit or version-like pattern
-                                    const match = file.name.match(/^([a-zA-Z0-9_-]+?)[-_.](?=\d)/);
-                                    if (match) {
-                                        modId = match[1];
-                                    } else {
-                                        // Fallback: everything before .jar
-                                        modId = file.name.replace('.jar', '');
-                                    }
-                                }
-
-                                if (modId) {
-                                    const normalizedId = modId.toLowerCase();
-                                    const modInfo = { file: file.name, version: metadata.version || 'unknown' };
-                                    
-                                    newInstalledSlugs.set(normalizedId, modInfo);
-                                    // Also add as ID just in case slug == id (rare for CF, common for Modrinth internal)
-                                    newInstalledMods.set(normalizedId, modInfo); 
-                                }
-                            } catch (e) {
-                                // Ignore errors reading metadata
-                            }
-                        }));
-                    }
-                }
-
-                setInstalledMods(newInstalledMods);
-                setInstalledSlugs(newInstalledSlugs);
-
-            } catch (e) {
-                console.error("Failed to load installed mods", e);
-            }
-        };
-        loadInstalled();
-    }, [targetInstanceId]);
-
-    const saveInstalledMod = async (modInfo: any) => {
-        if (!targetInstanceId) return;
-        try {
-            const instancePath = await invoke('get_instance_path', { id: targetInstanceId }) as string;
-            const modsJsonPath = await join(instancePath, 'mods.json');
-            
-            let currentMods = [];
-            const exists = await invoke('file_exists', { path: modsJsonPath }) as boolean;
-            if (exists) {
-                const content = await invoke('read_text_file', { path: modsJsonPath }) as string;
-                const data = JSON.parse(content);
-                if (data.mods && Array.isArray(data.mods)) {
-                    currentMods = data.mods;
-                }
-            }
-
-            // Check if already exists and update or add
-            const existingIndex = currentMods.findIndex((m: any) => m.id === modInfo.id);
-            if (existingIndex >= 0) {
-                currentMods[existingIndex] = { ...currentMods[existingIndex], ...modInfo };
-            } else {
-                currentMods.push(modInfo);
-            }
-
-            await invoke('write_text_file', { 
-                path: modsJsonPath, 
-                content: JSON.stringify({ mods: currentMods }, null, 2) 
-            });
-            
-            setInstalledMods(prev => new Map(prev).set(modInfo.id, { 
-                file: modInfo.file, 
-                version: modInfo.version, 
-                source: modInfo.source,
-                versionId: modInfo.versionId
-            }));
-
-            // Clear update flag
-            setUpdatesAvailable(prev => {
-                const newMap = new Map(prev);
-                newMap.delete(modInfo.id);
-                return newMap;
-            });
-        } catch (e) {
-            console.error("Failed to save installed mod", e);
-        }
-    };
 
     // Reset page when filters change
     useEffect(() => {
@@ -492,7 +315,6 @@ const Mods: React.FC = () => {
     // Auto-set filters when switching to Mods mode with an instance selected
     useEffect(() => {
         if (searchType === 'mods' || searchType === 'updates') {
-            // Reset active source if it was Porcos
             if (activeSource === 'porcos' && searchType === 'mods') {
                 setActiveSource('modrinth');
             }
@@ -500,24 +322,16 @@ const Mods: React.FC = () => {
             if (targetInstanceId) {
                 const instance = instances.find(i => i.id === targetInstanceId);
                 if (instance) {
-                    // Set version filter
                     let version = instance.selectedVersion || instance.version;
-
-                    // Parse complex version string if needed
-                    // Format: "1.20.1 (Fabric 0.14.22)"
                     if (version) {
                         const complexMatch = version.match(/^(.*) \((.*) (.*)\)$/);
-                        if (complexMatch) {
-                            version = complexMatch[1];
-                        }
+                        if (complexMatch) version = complexMatch[1];
                         setFilterVersion(version);
                     }
-
-                    // Set loader filter
                     if (instance.modLoader) {
                         setFilterLoader(instance.modLoader.toLowerCase());
                     } else {
-                        setFilterLoader(''); // Vanilla or unknown
+                        setFilterLoader('');
                     }
                 }
             }
@@ -527,870 +341,20 @@ const Mods: React.FC = () => {
         }
     }, [searchType, targetInstanceId, instances, activeSource]);
 
-    // Fetch Data
-    const formatNumber = (num: number) => {
-        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-        return num.toString();
-    };
-
-    const searchModrinth = async (query: string, pageIndex: number) => {
-        const requestId = ++currentDataRequestId.current;
-        try {
-            let facets = [];
-            
-            // Type Facet
-            if (searchType === 'modpacks') {
-                facets.push(["project_type:modpack"]);
-            } else {
-                facets.push(["project_type:mod"]);
-            }
-
-            // Version Facet
-            if (filterVersion) {
-                facets.push([`versions:${filterVersion}`]);
-            }
-
-            // Loader Facet
-            if (filterLoader) {
-                facets.push([`categories:${filterLoader}`]);
-            }
-
-            // Category Facet
-            if (filterCategory) {
-                facets.push([`categories:${filterCategory}`]);
-            }
-
-            const facetString = JSON.stringify(facets);
-            const offset = pageIndex * 20;
-                
-            const url = `https://api.modrinth.com/v2/search?query=${encodeURIComponent(query)}&facets=${encodeURIComponent(facetString)}&limit=20&offset=${offset}`;
-            
-            const responseText = await invoke('fetch_cors', { url }) as string;
-            if (currentDataRequestId.current !== requestId) return;
-
-            const data = JSON.parse(responseText);
-            
-            setTotalHits(data.total_hits);
-
-            const formatted = data.hits.map((hit: any) => ({
-                id: hit.project_id,
-                name: hit.title,
-                description: hit.description,
-                downloads: formatNumber(hit.downloads),
-                author: hit.author,
-                icon: hit.icon_url,
-                source: 'modrinth',
-                original: hit
-            }));
-            
-            setItems(formatted);
-        } catch (error) {
-            console.error("Failed to search Modrinth:", error);
-            if (currentDataRequestId.current === requestId) setItems([]);
-        } finally {
-            if (currentDataRequestId.current === requestId) setIsLoading(false);
-        }
-    };
-
-    const searchCurseForge = async (query: string, pageIndex: number) => {
-        const requestId = ++currentDataRequestId.current;
-        try {
-            const classId = searchType === 'modpacks' ? 4471 : 6;
-            const sortField = query ? 2 : 2; // 2 = Popularity
-            const sortOrder = 'desc';
-            const index = pageIndex * 20;
-            
-            let url = `https://api.curseforge.com/v1/mods/search?gameId=432&classId=${classId}&searchFilter=${encodeURIComponent(query)}&sortField=${sortField}&sortOrder=${sortOrder}&pageSize=20&index=${index}`;
-            
-            // Version Filter
-            if (filterVersion) {
-                url += `&gameVersion=${encodeURIComponent(filterVersion)}`;
-            }
-
-            // Loader Filter
-            if (filterLoader) {
-                let typeId = 0;
-                switch (filterLoader.toLowerCase()) {
-                    case 'forge': typeId = 1; break;
-                    case 'fabric': typeId = 4; break;
-                    case 'quilt': typeId = 5; break;
-                    case 'neoforge': typeId = 6; break;
-                }
-                if (typeId > 0) {
-                    url += `&modLoaderType=${typeId}`;
-                }
-            }
-
-            // Category Filter
-            if (filterCategory) {
-                const category = CATEGORIES.find(c => c.id === filterCategory);
-                if (category && category.cfId) {
-                    url += `&categoryId=${category.cfId}`;
-                }
-            }
-
-            const responseText = await invoke('fetch_cors', { 
-                url,
-                headers: {
-                    'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                    'Accept': 'application/json'
-                }
-            }) as string;
-
-            if (currentDataRequestId.current !== requestId) return;
-
-            const data = JSON.parse(responseText);
-            
-            setTotalHits(data.pagination.totalCount);
-
-            const formatted = data.data.map((mod: any) => ({
-                id: mod.id.toString(),
-                name: mod.name,
-                description: mod.summary,
-                downloads: formatNumber(mod.downloadCount),
-                author: mod.authors[0]?.name || 'Unknown',
-                icon: mod.logo?.url || 'https://www.curseforge.com/images/logo-curseforge.png',
-                source: 'curseforge',
-                original: mod
-            }));
-            
-            setItems(formatted);
-        } catch (error) {
-            console.error("Failed to search CurseForge:", error);
-            if (currentDataRequestId.current === requestId) setItems([]);
-        } finally {
-            if (currentDataRequestId.current === requestId) setIsLoading(false);
-        }
-    };
-
-    const fetchPorcosModpacks = async () => {
-        const requestId = ++currentDataRequestId.current;
-        try {
-            const url = "https://raw.githubusercontent.com/yalerooo/myApis/refs/heads/main/porcosLauncher/modpacks.json";
-            const responseText = await invoke('fetch_cors', { url }) as string;
-            
-            if (currentDataRequestId.current !== requestId) return;
-
-            const data = JSON.parse(responseText);
-            
-            // Group by ID
-            const grouped = new Map();
-            if (data.modpacks && Array.isArray(data.modpacks)) {
-                data.modpacks.forEach((mp: any) => {
-                    if (!grouped.has(mp.id)) {
-                        grouped.set(mp.id, {
-                            id: mp.id,
-                            name: mp.name,
-                            description: mp.description,
-                            author: "Porcos Team",
-                            icon: mp.icon,
-                            source: 'porcos',
-                            versions: []
-                        });
-                    }
-                    grouped.get(mp.id).versions.push(mp);
-                });
-            }
-
-            const items = Array.from(grouped.values()).map((g: any) => {
-                // Sort versions descending
-                const sortedVersions = g.versions.sort((a: any, b: any) => b.version.localeCompare(a.version, undefined, { numeric: true }));
-
-                // Use icon from latest version
-                const latestVersion = sortedVersions[0];
-                const latestIcon = latestVersion?.icon || g.icon;
-
-                return {
-                    ...g,
-                    icon: latestIcon,
-                    downloads: "N/A",
-                    versions: sortedVersions
-                };
-            });
-
-            // Filter items
-            const filteredItems = items.filter(item => {
-                // Filter by Query
-                if (searchQuery) {
-                    const q = searchQuery.toLowerCase();
-                    if (!item.name.toLowerCase().includes(q) && !item.description?.toLowerCase().includes(q)) {
-                        return false;
-                    }
-                }
-
-                // Filter by Version/Loader
-                if (!filterVersion && !filterLoader) return true;
-
-                return item.versions.some((v: any) => {
-                    const versionMatch = !filterVersion || v.minecraftVersion === filterVersion;
-                    
-                    let loaderMatch = !filterLoader;
-                    if (filterLoader) {
-                        const l = filterLoader.toLowerCase();
-                        const vLoader = v.modLoader ? v.modLoader.toLowerCase() : null;
-                        
-                        if (vLoader === l) loaderMatch = true;
-                        else if (l === 'forge' && (v.forgeVersion || vLoader === 'forge')) loaderMatch = true;
-                        else if (l === 'fabric' && (v.fabricVersion || vLoader === 'fabric')) loaderMatch = true;
-                        else if (l === 'quilt' && (v.quiltVersion || vLoader === 'quilt')) loaderMatch = true;
-                        else if (l === 'neoforge' && (v.neoForgeVersion || vLoader === 'neoforge')) loaderMatch = true;
-                    }
-
-                    return versionMatch && loaderMatch;
-                });
-            });
-            
-            setItems(filteredItems);
-        } catch (error) {
-            console.error("Failed to fetch Porcos modpacks:", error);
-            if (currentDataRequestId.current === requestId) setItems([]);
-        } finally {
-            if (currentDataRequestId.current === requestId) setIsLoading(false);
-        }
-    };
-
-    const loadAllInstalledModsDetails = async () => {
-        const requestId = ++currentDataRequestId.current;
-        setIsLoading(true);
-        setItems([]);
-        
-        try {
-            const modrinthIds: string[] = [];
-            const curseforgeIds: number[] = [];
-
-            // Group IDs
-            installedMods.forEach((mod, id) => {
-                if (mod.source === 'modrinth') modrinthIds.push(id);
-                else if (mod.source === 'curseforge') curseforgeIds.push(parseInt(id));
-                // Fallback inference
-                else if (/^\d+$/.test(id)) curseforgeIds.push(parseInt(id));
-                else modrinthIds.push(id);
-            });
-
-            let allItems: any[] = [];
-
-            // Fetch Modrinth (Chunked)
-            if (modrinthIds.length > 0) {
-                const chunkSize = 20; // Safe chunk size for URL length
-                for (let i = 0; i < modrinthIds.length; i += chunkSize) {
-                    if (currentDataRequestId.current !== requestId) return;
-                    const chunk = modrinthIds.slice(i, i + chunkSize);
-                    try {
-                        const url = `https://api.modrinth.com/v2/projects?ids=${encodeURIComponent(JSON.stringify(chunk))}`;
-                        const responseText = await invoke('fetch_cors', { url }) as string;
-                        const data = JSON.parse(responseText);
-                        const formatted = data.map((hit: any) => ({
-                            id: hit.id,
-                            name: hit.title,
-                            description: hit.description,
-                            downloads: formatNumber(hit.downloads),
-                            author: "Unknown", 
-                            icon: hit.icon_url,
-                            source: 'modrinth',
-                            original: hit
-                        }));
-                        allItems = [...allItems, ...formatted];
-                    } catch (e) {
-                        console.error("Failed to fetch Modrinth chunk", e);
-                    }
-                }
-            }
-
-            // Fetch CurseForge (Looping GETs as bulk POST might not be supported by fetch_cors wrapper)
-            if (curseforgeIds.length > 0) {
-                const cfPromises = curseforgeIds.map(async (id) => {
-                     if (currentDataRequestId.current !== requestId) return null;
-                     try {
-                        const url = `https://api.curseforge.com/v1/mods/${id}`;
-                        const res = await invoke('fetch_cors', { 
-                            url,
-                            headers: {
-                                'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                                'Accept': 'application/json'
-                            }
-                        }) as string;
-                        const data = JSON.parse(res);
-                        const mod = data.data;
-                        return {
-                            id: mod.id.toString(),
-                            name: mod.name,
-                            description: mod.summary,
-                            downloads: formatNumber(mod.downloadCount),
-                            author: mod.authors[0]?.name || 'Unknown',
-                            icon: mod.logo?.url || 'https://www.curseforge.com/images/logo-curseforge.png',
-                            source: 'curseforge',
-                            original: mod
-                        };
-                     } catch (e) { return null; }
-                });
-                
-                const cfResults = await Promise.all(cfPromises);
-                if (currentDataRequestId.current === requestId) {
-                    allItems = [...allItems, ...cfResults.filter(r => r !== null)];
-                }
-            }
-
-            if (currentDataRequestId.current === requestId) {
-                // Deduplicate items by ID to prevent rendering issues
-                const uniqueItems = Array.from(new Map(allItems.map(item => [item.id, item])).values());
-                setItems(uniqueItems);
-            }
-        } catch (e) {
-            console.error("Failed to load installed details", e);
-            if (currentDataRequestId.current === requestId) {
-                setItems([]);
-            }
-        } finally {
-            if (currentDataRequestId.current === requestId) {
-                setIsLoading(false);
-            }
-        }
-    };
-
-    useEffect(() => {
-        // Only set loading if we are actually changing search parameters that require a fetch
-        // We don't want to reload on installedMods change if we are just installing
-        if (installingModId) return;
-
-        if (searchType === 'updates') return;
-
-        setIsLoading(true);
-        
-        const timer = setTimeout(() => {
-            if (activeSource === 'modrinth') {
-                searchModrinth(searchQuery, page);
-            } else if (activeSource === 'curseforge') {
-                searchCurseForge(searchQuery, page);
-            } else if (activeSource === 'porcos') {
-                fetchPorcosModpacks();
-            }
-        }, 500); // Debounce
-
-        return () => clearTimeout(timer);
-    }, [searchQuery, activeSource, searchType, filterVersion, filterLoader, filterCategory, page]);
-
-    useEffect(() => {
-        if (searchType === 'updates' && !installingModId) {
-            loadAllInstalledModsDetails();
-        }
-    }, [searchType, installedMods]);
-
-    const handleSearch = (e?: React.FormEvent) => {
-        if (e) e.preventDefault();
-    };
-
-    const installModrinth = async (projectId: string, version: string, loader: string, instancePath: string, visited: Set<string> = new Set(), specificVersionId?: string, isDependency: boolean = false): Promise<any[]> => {
-        if (visited.has(projectId)) return [];
-        visited.add(projectId);
-
-        // If it's a dependency and already installed, skip
-        if (isDependency && installedMods.has(projectId)) {
-            return [];
-        }
-
-        const url = `https://api.modrinth.com/v2/project/${projectId}/version`;
-        const responseText = await invoke('fetch_cors', { url }) as string;
-        const versions = JSON.parse(responseText);
-
-        let compatibleVersion;
-        if (specificVersionId) {
-            compatibleVersion = versions.find((v: any) => v.id === specificVersionId);
-        }
-
-        if (!compatibleVersion) {
-            compatibleVersion = versions.find((v: any) => {
-                const matchesGameVersion = v.game_versions.includes(version);
-                const matchesLoader = loader ? v.loaders.includes(loader.toLowerCase()) : true;
-                return matchesGameVersion && matchesLoader;
-            });
-        }
-
-        if (!compatibleVersion) {
-            console.warn(`No compatible version found for dependency ${projectId}`);
-            return [];
-        }
-
-        let installedFiles: any[] = [];
-
-        // Install dependencies first
-        if (compatibleVersion.dependencies) {
-            for (const dep of compatibleVersion.dependencies) {
-                if (dep.dependency_type === "required" && dep.project_id) {
-                    const deps = await installModrinth(dep.project_id, version, loader, instancePath, visited, undefined, true);
-                    installedFiles = [...installedFiles, ...deps];
-                }
-            }
-        }
-
-        const file = compatibleVersion.files.find((f: any) => f.primary) || compatibleVersion.files[0];
-        const filePath = await join(instancePath, 'mods', file.filename);
-        
-        await invoke('download_file', { url: file.url, path: filePath });
-        
-        // Fetch project info for icon/name
-        let icon = undefined;
-        let name = file.filename;
-        try {
-             const projectUrl = `https://api.modrinth.com/v2/project/${projectId}`;
-             const projectRes = await invoke('fetch_cors', { url: projectUrl }) as string;
-             const projectData = JSON.parse(projectRes);
-             icon = projectData.icon_url;
-             name = projectData.title;
-        } catch (e) {}
-
-        await saveInstalledMod({
-            id: projectId,
-            source: 'modrinth',
-            versionId: compatibleVersion.id,
-            version: compatibleVersion.version_number,
-            file: file.filename
-        });
-
-        installedFiles.push({
-            name,
-            file: file.filename,
-            icon
-        });
-        return installedFiles;
-    };
-
-    const installCurseForge = async (modId: string, version: string, loader: string, instancePath: string, visited: Set<string> = new Set(), specificFileId?: number, isDependency: boolean = false): Promise<any[]> => {
-        if (visited.has(modId)) return [];
-        visited.add(modId);
-
-        // If it's a dependency and already installed, skip
-        if (isDependency && installedMods.has(modId)) {
-            return [];
-        }
-
-        const url = `https://api.curseforge.com/v1/mods/${modId}/files`;
-        const responseText = await invoke('fetch_cors', { 
-            url,
-            headers: {
-                'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                'Accept': 'application/json'
-            }
-        }) as string;
-        const data = JSON.parse(responseText);
-        
-        let compatibleFile;
-        if (specificFileId) {
-            compatibleFile = data.data.find((f: any) => f.id === specificFileId);
-        }
-
-        if (!compatibleFile) {
-            compatibleFile = data.data.find((f: any) => {
-                const hasVersion = f.gameVersions.includes(version);
-                let hasLoader = true;
-                if (loader) {
-                    const loaderName = loader.toLowerCase();
-                    hasLoader = f.gameVersions.some((gv: string) => gv.toLowerCase() === loaderName);
-                }
-                return hasVersion && hasLoader;
-            });
-        }
-
-        if (!compatibleFile) {
-            console.warn(`No compatible version found for dependency ${modId}`);
-            return [];
-        }
-
-        let installedFiles: any[] = [];
-
-        // Install dependencies
-        if (compatibleFile.dependencies) {
-            for (const dep of compatibleFile.dependencies) {
-                if (dep.relationType === 3) { // RequiredDependency
-                    const deps = await installCurseForge(dep.modId.toString(), version, loader, instancePath, visited, undefined, true);
-                    installedFiles = [...installedFiles, ...deps];
-                }
-            }
-        }
-
-        const filePath = await join(instancePath, 'mods', compatibleFile.fileName);
-        await invoke('download_file', { url: compatibleFile.downloadUrl, path: filePath });
-
-        // Fetch project info for icon/name
-        let icon = undefined;
-        let name = compatibleFile.displayName;
-        try {
-             const projectUrl = `https://api.curseforge.com/v1/mods/${modId}`;
-             const projectRes = await invoke('fetch_cors', { 
-                url: projectUrl,
-                headers: {
-                    'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                    'Accept': 'application/json'
-                }
-             }) as string;
-             const projectData = JSON.parse(projectRes);
-             icon = projectData.data.logo?.url;
-             name = projectData.data.name;
-        } catch (e) {}
-
-        await saveInstalledMod({
-            id: modId,
-            source: 'curseforge',
-            versionId: compatibleFile.id.toString(),
-            version: compatibleFile.displayName,
-            file: compatibleFile.fileName
-        });
-
-        installedFiles.push({
-            name,
-            file: compatibleFile.fileName,
-            icon
-        });
-        return installedFiles;
-    };
-
-    const handleInstall = async (item: any, selectedVersion?: any, options: { silent?: boolean, ignoreLock?: boolean } = {}) => {
-        if (searchType === 'modpacks') {
-            if (selectedVersion) {
-                setSelectedModpack({ ...item, preSelectedVersion: selectedVersion });
-            } else {
-                setSelectedModpack(item);
-            }
-            setShowModpackModal(true);
-            return;
-        }
-
-        if (!targetInstanceId || (!options.ignoreLock && installingModId)) return;
-        setInstallingModId(item.id);
-
-        try {
-            const instancePath = await invoke('get_instance_path', { id: targetInstanceId }) as string;
-            
-            // Check if update (delete old)
-            let installed = installedMods.get(item.id);
-            if (!installed && item.original?.slug) {
-                installed = installedSlugs.get(item.original.slug.toLowerCase());
-            }
-            
-            if (installed) {
-                // Delete old file
-                const oldFilePath = await join(instancePath, 'mods', installed.file);
-                const exists = await invoke('file_exists', { path: oldFilePath }) as boolean;
-                if (exists) {
-                    await invoke('delete_file', { path: oldFilePath });
-                }
-            }
-
-            let installedFiles: any[] = [];
-            if (item.source === 'modrinth') {
-                installedFiles = await installModrinth(item.id, filterVersion, filterLoader, instancePath, new Set(), selectedVersion?.id);
-            } else if (item.source === 'curseforge') {
-                installedFiles = await installCurseForge(item.id, filterVersion, filterLoader, instancePath, new Set(), selectedVersion?.id);
-            }
-
-            setInstalledModName(item.name);
-            // Exclude main mod (last item) to show only dependencies
-            const dependencies = installedFiles.slice(0, -1);
-            setInstalledDependencies(dependencies); 
-            
-            // Only show modal if there are dependencies installed and not silent
-            if (dependencies.length > 0 && !options.silent) {
-                setShowSuccessModal(true);
-            }
-            
-        } catch (error) {
-            console.error("Failed to install mod:", error);
-            if (!options.silent) {
-                alert("Error al instalar el mod. Revisa la consola.");
-            }
-        } finally {
-            setInstallingModId(null);
-        }
-    };
-
-    const handleUpdateAll = async () => {
-        const updates = items.filter(item => updatesAvailable.get(item.id));
-        if (updates.length === 0) return;
-
-        setIsUpdatingAll(true);
-        try {
-            for (const item of updates) {
-                await handleInstall(item, undefined, { silent: true, ignoreLock: true });
-            }
-        } finally {
-            setIsUpdatingAll(false);
-        }
-    };
-
-    const verifyDependencies = async () => {
-        if (!targetInstanceId) return;
-        setIsUpdatingAll(true);
-        setVerificationStatus('Iniciando verificación...');
-        
-        try {
-            const instancePath = await invoke('get_instance_path', { id: targetInstanceId }) as string;
-            const missingDeps = new Map<string, { id: string, source: ModSource }>();
-            
-            // 1. Build a comprehensive set of installed Project IDs
-            const installedProjectIds = new Set<string>();
-            for (const id of installedMods.keys()) {
-                installedProjectIds.add(id);
-            }
-
-            // 2. Resolve unknown mods via Hash (Batch)
-            setVerificationStatus('Analizando archivos...');
-            const hashesToResolve: string[] = [];
-            const hashToModId = new Map<string, string>();
-            
-            // New: Collect Murmur2 hashes for CurseForge cross-check
-            const murmurHashesToResolve: number[] = [];
-            const murmurToModId = new Map<number, string>();
-
-            // Calculate hashes locally
-            let processedHashes = 0;
-            const allMods = Array.from(installedMods.entries());
-            
-            for (const [id, mod] of allMods) {
-                try {
-                    const filePath = await join(instancePath, 'mods', mod.file);
-                    const exists = await invoke('file_exists', { path: filePath }) as boolean;
-                    if (exists) {
-                        // SHA1 for Modrinth
-                        if (!mod.versionId && mod.source !== 'curseforge') {
-                            const hash = await invoke('get_file_hash', { path: filePath }) as string;
-                            hashesToResolve.push(hash);
-                            hashToModId.set(hash, id);
-                        }
-
-                        // Murmur2 for CurseForge (Check ALL mods to find cross-platform deps)
-                        const murmur = await invoke('get_file_hash_murmur2', { path: filePath }) as number;
-                        murmurHashesToResolve.push(murmur);
-                        murmurToModId.set(murmur, id);
-                    }
-                } catch (e) {}
-                processedHashes++;
-                if (processedHashes % 5 === 0) setVerificationStatus(`Analizando archivos (${processedHashes}/${allMods.length})...`);
-            }
-
-            // Batch Query Modrinth for Hashes
-            if (hashesToResolve.length > 0) {
-                setVerificationStatus('Consultando API de Modrinth (Hashes)...');
-                // Split into chunks of 50 to be safe
-                const hashChunks = [];
-                for (let i = 0; i < hashesToResolve.length; i += 50) {
-                    hashChunks.push(hashesToResolve.slice(i, i + 50));
-                }
-
-                for (const chunk of hashChunks) {
-                    try {
-                        const responseText = await invoke('fetch_cors', { 
-                            url: 'https://api.modrinth.com/v2/version_files',
-                            method: 'POST',
-                            body: JSON.stringify({
-                                hashes: chunk,
-                                algorithm: 'sha1'
-                            }),
-                            headers: { 'Content-Type': 'application/json' }
-                        }) as string;
-                        
-                        const data = JSON.parse(responseText);
-                        // data is { "hash": { ...versionObj... } }
-                        
-                        for (const [hash, versionData] of Object.entries(data)) {
-                            const vData = versionData as any;
-                            const modId = hashToModId.get(hash);
-                            if (modId && vData.project_id) {
-                                installedProjectIds.add(vData.project_id);
-                                
-                                // Update local map
-                                const mod = installedMods.get(modId);
-                                if (mod) {
-                                    mod.versionId = vData.id;
-                                    mod.source = 'modrinth';
-                                    installedMods.set(modId, mod);
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Batch hash lookup failed", e);
-                    }
-                }
-            }
-
-            // Batch Query CurseForge for Fingerprints (Murmur2)
-            const curseforgeChecks: { modId: string, fileId: string }[] = [];
-            
-            if (murmurHashesToResolve.length > 0) {
-                setVerificationStatus('Consultando API de CurseForge (Fingerprints)...');
-                const murmurChunks = [];
-                for (let i = 0; i < murmurHashesToResolve.length; i += 50) {
-                    murmurChunks.push(murmurHashesToResolve.slice(i, i + 50));
-                }
-
-                for (const chunk of murmurChunks) {
-                    try {
-                        const responseText = await invoke('fetch_cors', { 
-                            url: 'https://api.curseforge.com/v1/fingerprints',
-                            method: 'POST',
-                            body: JSON.stringify({
-                                fingerprints: chunk
-                            }),
-                            headers: {
-                                'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                                'Content-Type': 'application/json',
-                                'Accept': 'application/json'
-                            }
-                        }) as string;
-                        
-                        const data = JSON.parse(responseText);
-                        // data.data.exactMatches = [{ id, file, file.id }]
-                        
-                        if (data.data && data.data.exactMatches) {
-                            for (const match of data.data.exactMatches) {
-                                // We found a match on CurseForge!
-                                // Even if it's a Modrinth mod, we now know its CF identity too.
-                                // Add to checks list so we verify its CF dependencies.
-                                curseforgeChecks.push({ modId: match.id.toString(), fileId: match.file.id.toString() });
-                                
-                                // Also add to installedProjectIds (CF ID) so we don't try to install it again if another mod requires it
-                                installedProjectIds.add(match.id.toString());
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Batch fingerprint lookup failed", e);
-                    }
-                }
-            }
-
-            // 3. Check Dependencies (Batch for Modrinth)
-            setVerificationStatus('Verificando dependencias...');
-            
-            // Collect all Modrinth Version IDs
-            const modrinthVersionIds: string[] = [];
-            // curseforgeChecks is already populated from fingerprints + existing known CF mods
-
-            installedMods.forEach((mod, id) => {
-                if (mod.versionId) {
-                    if (mod.source === 'modrinth') {
-                        modrinthVersionIds.push(mod.versionId);
-                    } else if (mod.source === 'curseforge') {
-                        // If we haven't already added it via fingerprint check (avoid dupes)
-                        if (!curseforgeChecks.some(c => c.modId === id && c.fileId === mod.versionId)) {
-                            curseforgeChecks.push({ modId: id, fileId: mod.versionId! });
-                        }
-                    }
-                }
-            });
-
-            // Batch fetch Modrinth versions
-            if (modrinthVersionIds.length > 0) {
-                setVerificationStatus(`Verificando ${modrinthVersionIds.length} mods de Modrinth...`);
-                const versionChunks = [];
-                for (let i = 0; i < modrinthVersionIds.length; i += 50) {
-                    versionChunks.push(modrinthVersionIds.slice(i, i + 50));
-                }
-
-                for (const chunk of versionChunks) {
-                    try {
-                        const url = `https://api.modrinth.com/v2/versions?ids=${encodeURIComponent(JSON.stringify(chunk))}`;
-                        const responseText = await invoke('fetch_cors', { url }) as string;
-                        const versionsData = JSON.parse(responseText); // Array of version objects
-
-                        for (const versionData of versionsData) {
-                            if (versionData.dependencies) {
-                                for (const dep of versionData.dependencies) {
-                                    if (dep.dependency_type === "required" && dep.project_id) {
-                                        if (!installedProjectIds.has(dep.project_id)) {
-                                            missingDeps.set(dep.project_id, { id: dep.project_id, source: 'modrinth' });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.error("Batch version lookup failed", e);
-                    }
-                }
-            }
-
-            // Check CurseForge (Sequential/Chunked)
-            if (curseforgeChecks.length > 0) {
-                setVerificationStatus(`Verificando ${curseforgeChecks.length} mods de CurseForge...`);
-                let processedCF = 0;
-                
-                await processInChunks(curseforgeChecks, 5, async ({ modId, fileId }) => {
-                    try {
-                        const url = `https://api.curseforge.com/v1/mods/${modId}/files/${fileId}`;
-                        const responseText = await invoke('fetch_cors', { 
-                            url,
-                            headers: {
-                                'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                                'Accept': 'application/json'
-                            }
-                        }) as string;
-                        const data = JSON.parse(responseText);
-                        const fileData = data.data;
-
-                        if (fileData.dependencies) {
-                            for (const dep of fileData.dependencies) {
-                                if (dep.relationType === 3) { // Required
-                                    if (!installedMods.has(dep.modId.toString())) {
-                                        missingDeps.set(dep.modId.toString(), { id: dep.modId.toString(), source: 'curseforge' });
-                                    }
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.error(`Failed to check CF deps for file ${fileId}`, e);
-                    }
-                    processedCF++;
-                    if (processedCF % 5 === 0) setVerificationStatus(`Verificando CurseForge (${processedCF}/${curseforgeChecks.length})...`);
-                });
-            }
-
-            setVerificationStatus('');
-
-            if (missingDeps.size > 0) {
-                const confirmInstall = confirm(`Se encontraron ${missingDeps.size} dependencias faltantes. ¿Deseas instalarlas ahora?`);
-                if (confirmInstall) {
-                    let installedCount = 0;
-                    const depsToInstall = Array.from(missingDeps.values());
-                    
-                    for (let i = 0; i < depsToInstall.length; i++) {
-                        const dep = depsToInstall[i];
-                        setVerificationStatus(`Instalando dependencia ${i + 1}/${depsToInstall.length}...`);
-                        try {
-                            if (dep.source === 'modrinth') {
-                                await installModrinth(dep.id, filterVersion, filterLoader, instancePath, new Set(), undefined, true);
-                            } else {
-                                await installCurseForge(dep.id, filterVersion, filterLoader, instancePath, new Set(), undefined, true);
-                            }
-                            installedCount++;
-                        } catch (e) {
-                            console.error(`Failed to install dependency ${dep.id}`, e);
-                        }
-                    }
-                    alert(`Se instalaron ${installedCount} dependencias.`);
-                    // Refresh list
-                    const currentId = targetInstanceId;
-                    setTargetInstanceId('');
-                    setTimeout(() => setTargetInstanceId(currentId), 50);
-                }
-            } else {
-                alert("Todas las dependencias parecen estar instaladas.");
-            }
-
-        } catch (e) {
-            console.error("Verification failed", e);
-            alert("Error al verificar dependencias.");
-        } finally {
-            setIsUpdatingAll(false);
-            setVerificationStatus('');
-        }
-    };
+    // ─── Derived ───────────────────────────────────────────────────
 
     const getTargetInstanceName = () => {
         return instances.find(i => i.id === targetInstanceId)?.name || "Seleccionar Instancia";
     };
 
     const targetInstance = instances.find(i => i.id === targetInstanceId);
-    
     const filteredItems = items.filter(item => searchType !== 'updates' || updatesAvailable.get(item.id));
+
+    const handleSearch = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+    };
+
+    // ─── Render ────────────────────────────────────────────────────
 
     return (
         <div className={styles.container} style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -1489,13 +453,13 @@ const Mods: React.FC = () => {
                             <FilterDropdown
                                 value={filterVersion}
                                 onChange={setFilterVersion}
-                                options={(targetInstance?.versions || []).map(v => ({ value: v, label: v }))}
+                                options={(targetInstance?.versions || []).map((v: string) => ({ value: v, label: v }))}
                                 placeholder={t('anyVersion')}
                                 icon={<Gamepad2 size={16} className="text-[#a1a1aa]" />}
                             />
                         )}
                         
-                        {/* Active Filters Badge - Only show if NOT showing the dropdown selector */}
+                        {/* Active Filters Badge */}
                         {!(searchType === 'mods' && targetInstance?.versions && targetInstance.versions.length > 1) && (filterVersion || filterLoader) && (
                             <div className={styles.filterBadge}>
                                 <Filter size={12} className="text-[#ffbfba]" />
@@ -1525,17 +489,17 @@ const Mods: React.FC = () => {
                         {searchType === 'mods' && (
                             <button 
                                 onClick={verifyDependencies}
-                                disabled={isUpdatingAll}
+                                disabled={isUpdatingAll || isLoadingMods}
                                 className={styles.updateAllButton}
-                                title={t('verifyDependencies')}
+                                title={isLoadingMods ? 'Cargando mods...' : t('verifyDependencies')}
                                 style={{ minWidth: '180px' }}
                             >
-                                {isUpdatingAll ? (
+                                {isUpdatingAll || isLoadingMods ? (
                                     <Loader2 className="animate-spin" size={14} />
                                 ) : (
                                     <ShieldCheck size={14} />
                                 )}
-                                {verificationStatus ? verificationStatus : (isUpdatingAll ? t('updating') : t('verifyDependencies'))}
+                                {isLoadingMods ? 'Cargando mods...' : verificationStatus ? verificationStatus : (isUpdatingAll ? t('updating') : t('verifyDependencies'))}
                             </button>
                         )}
                     </div>
@@ -1666,46 +630,74 @@ const Mods: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Action */}
-                                            <button 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleInstall(item);
-                                                }}
-                                                disabled={installingModId === item.id || (isInstalled && !hasUpdate && searchType === 'mods')}
-                                                className={cn(
-                                                    styles.installButton,
-                                                    searchType === 'modpacks' ? styles.installButtonModpacks : styles.installButtonMods,
-                                                    isInstalled && !hasUpdate && searchType === 'mods' && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
-                                                    isInstalled && hasUpdate && searchType === 'mods' && "bg-[#ffbfba]/20 text-[#ffbfba] hover:bg-[#ffbfba]/30 border-[#ffbfba]/30"
-                                                )}
-                                            >
-                                                {installingModId === item.id ? (
-                                                    <Loader2 className="animate-spin" size={18} />
-                                                ) : searchType === 'modpacks' ? (
+                                            {/* Actions */}
+                                            <div className="flex items-center gap-1">
+                                                {/* Toggle / Uninstall buttons — only for installed mods */}
+                                                {isInstalled && searchType !== 'modpacks' && (
                                                     <>
-                                                        <Plus size={18} />
-                                                        {t('createInstanceFromModpack')}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleToggleMod(item);
+                                                            }}
+                                                            className="p-2 rounded-lg transition-colors hover:bg-white/10 text-[#a1a1aa] hover:text-yellow-400"
+                                                            title={installedMods.get(item.id)?.file?.endsWith('.disabled') ? 'Activar mod' : 'Desactivar mod'}
+                                                        >
+                                                            <Power size={16} className={installedMods.get(item.id)?.file?.endsWith('.disabled') ? 'text-yellow-500' : ''} />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleUninstall(item);
+                                                            }}
+                                                            className="p-2 rounded-lg transition-colors hover:bg-red-500/20 text-[#a1a1aa] hover:text-red-400"
+                                                            title="Desinstalar mod"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
                                                     </>
-                                                ) : isInstalled ? (
-                                                    hasUpdate ? (
+                                                )}
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleInstall(item);
+                                                    }}
+                                                    disabled={installingModId === item.id || (isInstalled && !hasUpdate && searchType === 'mods')}
+                                                    className={cn(
+                                                        styles.installButton,
+                                                        searchType === 'modpacks' ? styles.installButtonModpacks : styles.installButtonMods,
+                                                        isInstalled && !hasUpdate && searchType === 'mods' && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
+                                                        isInstalled && hasUpdate && searchType === 'mods' && "bg-[#ffbfba]/20 text-[#ffbfba] hover:bg-[#ffbfba]/30 border-[#ffbfba]/30",
+                                                        installedMods.get(item.id)?.file?.endsWith('.disabled') && "opacity-50"
+                                                    )}
+                                                >
+                                                    {installingModId === item.id ? (
+                                                        <Loader2 className="animate-spin" size={18} />
+                                                    ) : searchType === 'modpacks' ? (
                                                         <>
-                                                            <Download size={18} />
-                                                            {t('update')}
+                                                            <Plus size={18} />
+                                                            {t('createInstanceFromModpack')}
                                                         </>
+                                                    ) : isInstalled ? (
+                                                        hasUpdate ? (
+                                                            <>
+                                                                <Download size={18} />
+                                                                {t('update')}
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Check size={18} />
+                                                                {installedMods.get(item.id)?.file?.endsWith('.disabled') ? 'Desactivado' : t('installed')}
+                                                            </>
+                                                        )
                                                     ) : (
                                                         <>
-                                                            <Check size={18} />
-                                                            {t('installed')}
+                                                            <Download size={18} />
+                                                            {t('install')}
                                                         </>
-                                                    )
-                                                ) : (
-                                                    <>
-                                                        <Download size={18} />
-                                                        {t('install')}
-                                                    </>
-                                                )}
-                                            </button>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </motion.div>
                                     );
                                 })}
@@ -1727,7 +719,7 @@ const Mods: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Pagination Bar - Always visible if items exist */}
+                    {/* Pagination Bar */}
                     {!isLoading && items.length > 0 && searchType !== 'updates' && (
                         <div className={cn(styles.paginationBar, activeSource === 'porcos' && styles.fullWidth)}>
                             <button
@@ -1780,6 +772,23 @@ const Mods: React.FC = () => {
                     />
                 </div>
             )}
+
+            <DependencySelectModal
+                isOpen={depSelectModal.isOpen}
+                dependencies={depSelectModal.dependencies}
+                onConfirm={handleDepSelectConfirm}
+                onCancel={handleDepSelectCancel}
+            />
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText={confirmModal.confirmText}
+                danger={confirmModal.danger}
+                onConfirm={confirmModal.onConfirm}
+                onCancel={handleConfirmCancel}
+            />
         </div>
     );
 };

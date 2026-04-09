@@ -256,6 +256,7 @@ export const translations = {
     
     // Launch states
     preparing: 'Preparing...',
+    checkingJavaVersion: 'Checking required Java version...',
     downloadingJava: 'Downloading Java {version} ({progress}%)...',
     downloadingJavaLabel: 'Downloading {label}...',
     extractingJava: 'Extracting {label}...',
@@ -543,6 +544,7 @@ export const translations = {
     
     // Launch states
     preparing: 'Preparando...',
+    checkingJavaVersion: 'Verificando versión de Java requerida...',
     downloadingJava: 'Descargando Java {version} ({progress}%)...',
     downloadingJavaLabel: 'Descargando {label}...',
     extractingJava: 'Descomprimiendo {label}...',

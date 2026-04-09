@@ -5,7 +5,9 @@ import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import DOMPurify from 'dompurify';
 import { cn } from '@/lib/utils';
+import { CURSEFORGE_HEADERS } from '@/lib/constants';
 import styles from './ModDetailsView.module.css';
 
 interface ModDetailsViewProps {
@@ -111,19 +113,16 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                 const url = `https://api.curseforge.com/v1/mods/${item.id}/files`;
                 const responseText = await invoke('fetch_cors', { 
                     url,
-                    headers: {
-                        'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                        'Accept': 'application/json'
-                    }
+                    headers: CURSEFORGE_HEADERS
                 }) as string;
                 const data = JSON.parse(responseText);
-                
+
                 let mappedVersions = data.data.map((f: any) => ({
                     id: f.id,
                     name: f.displayName,
                     type: f.releaseType === 1 ? 'release' : f.releaseType === 2 ? 'beta' : 'alpha',
                     gameVersions: f.gameVersions,
-                    loaders: [], // CF doesn't always make this easy to parse from just the file object without checking gameVersions strings
+                    loaders: [],
                     date: new Date(f.fileDate).toLocaleDateString(),
                     original: f
                 }));
@@ -197,15 +196,11 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                 const url = `https://api.curseforge.com/v1/mods/${item.id}/description`;
                 const responseText = await invoke('fetch_cors', { 
                     url,
-                    headers: {
-                        'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                        'Accept': 'application/json'
-                    }
+                    headers: CURSEFORGE_HEADERS
                 }) as string;
-                
                 try {
                     const data = JSON.parse(responseText);
-                    setDescription(data.data || "No description available.");
+                    setDescription(data.data || item.description);
                 } catch (e) {
                     console.error("Failed to parse CurseForge description", e);
                     setDescription(responseText);
@@ -376,7 +371,7 @@ const ModDetailsView: React.FC<ModDetailsViewProps> = ({
                             {/* Description */}
                             <div className="mt-8 prose prose-invert max-w-none prose-img:rounded-lg prose-img:mx-auto prose-img:block prose-a:text-[#ffbfba] prose-headings:text-white prose-strong:text-white">
                                 {item.source === 'curseforge' ? (
-                                    <div dangerouslySetInnerHTML={{ __html: description }} />
+                                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(description) }} />
                                 ) : (
                                     <ReactMarkdown 
                                         remarkPlugins={[remarkGfm]} 

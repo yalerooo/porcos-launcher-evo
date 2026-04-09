@@ -264,13 +264,19 @@ pub struct ModMetadata {
     version: Option<String>,
 }
 
-fn extract_toml_value(line: &str) -> Option<String> {
-    let parts: Vec<&str> = line.split('=').collect();
-    if parts.len() >= 2 {
-        let val = parts[1].trim().trim_matches('"').trim_matches('\'');
-        return Some(val.to_string());
+fn parse_forge_toml(content: &str) -> ModMetadata {
+    if let Ok(toml_value) = content.parse::<toml::Value>() {
+        // mods.toml uses [[mods]] array of tables
+        if let Some(mods) = toml_value.get("mods").and_then(|v| v.as_array()) {
+            if let Some(first_mod) = mods.first() {
+                let id = first_mod.get("modId").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let name = first_mod.get("displayName").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let version = first_mod.get("version").and_then(|v| v.as_str()).map(|s| s.to_string());
+                return ModMetadata { id, name, version };
+            }
+        }
     }
-    None
+    ModMetadata { id: None, name: None, version: None }
 }
 
 #[tauri::command]
@@ -292,33 +298,45 @@ pub async fn get_mod_metadata(path: String) -> Result<ModMetadata, String> {
         }
     }
 
-    // 2. Try Forge (META-INF/mods.toml)
+    // 2. Try Quilt (quilt.mod.json)
+    if let Ok(mut file) = archive.by_name("quilt.mod.json") {
+        let mut content = String::new();
+        if std::io::Read::read_to_string(&mut file, &mut content).is_ok() {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                let loader = json.get("quilt_loader");
+                let id = loader.and_then(|l| l.get("id")).and_then(|v| v.as_str()).map(|s| s.to_string());
+                let name = loader
+                    .and_then(|l| l.get("metadata"))
+                    .and_then(|m| m.get("name"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let version = loader.and_then(|l| l.get("version")).and_then(|v| v.as_str()).map(|s| s.to_string());
+                
+                if id.is_some() {
+                    return Ok(ModMetadata { id, name, version });
+                }
+            }
+        }
+    }
+
+    // 3. Try NeoForge (META-INF/neoforge.mods.toml)
+    if let Ok(mut file) = archive.by_name("META-INF/neoforge.mods.toml") {
+        let mut content = String::new();
+        if std::io::Read::read_to_string(&mut file, &mut content).is_ok() {
+            let metadata = parse_forge_toml(&content);
+            if metadata.id.is_some() {
+                return Ok(metadata);
+            }
+        }
+    }
+
+    // 4. Try Forge (META-INF/mods.toml)
     if let Ok(mut file) = archive.by_name("META-INF/mods.toml") {
         let mut content = String::new();
         if std::io::Read::read_to_string(&mut file, &mut content).is_ok() {
-            let mut id = None;
-            let mut name = None;
-            let mut version = None;
-
-            for line in content.lines() {
-                let line = line.trim();
-                if line.starts_with("modId") {
-                    if let Some(val) = extract_toml_value(line) {
-                        if id.is_none() { id = Some(val); }
-                    }
-                } else if line.starts_with("displayName") {
-                    if let Some(val) = extract_toml_value(line) {
-                        if name.is_none() { name = Some(val); }
-                    }
-                } else if line.starts_with("version") {
-                    if let Some(val) = extract_toml_value(line) {
-                        if version.is_none() { version = Some(val); }
-                    }
-                }
-            }
-            
-            if id.is_some() {
-                return Ok(ModMetadata { id, name, version });
+            let metadata = parse_forge_toml(&content);
+            if metadata.id.is_some() {
+                return Ok(metadata);
             }
         }
     }

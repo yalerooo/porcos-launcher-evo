@@ -84,7 +84,7 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
                         setIconUrl(currentUrl);
                     }
                 } catch (e) {
-                    // Icon not found
+                    if (isMounted) setIconUrl(null);
                 }
             } else if (activeTab === 'Saves' && file.is_dir && instancePath) {
                 try {

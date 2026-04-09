@@ -1,6 +1,5 @@
 use tauri::command;
 use crate::launcher::{MinecraftLauncher, LaunchOptions, LaunchResult, VersionManager, MinecraftVersion};
-// use std::path::PathBuf;
 
 #[command]
 pub async fn get_available_versions() -> Result<Vec<MinecraftVersion>, String> {
@@ -55,4 +54,30 @@ pub async fn launch_minecraft(window: tauri::Window, options: serde_json::Value)
 #[command]
 pub fn generate_offline_uuid(username: String) -> String {
     MinecraftLauncher::generate_offline_uuid(&username)
+}
+
+#[command]
+pub async fn get_required_java_version(version: String) -> Result<u32, String> {
+    println!("[Command] get_required_java_version called for {}", version);
+
+    let cache_dir = MinecraftLauncher::get_default_minecraft_dir().join("versions");
+    let version_manager = VersionManager::new(cache_dir);
+
+    let manifest = version_manager.fetch_version_manifest().await?;
+
+    let version_info = manifest
+        .versions
+        .iter()
+        .find(|v| v.id == version)
+        .ok_or_else(|| format!("Version {} not found in manifest", version))?;
+
+    let details = version_manager.fetch_version_details(&version_info.url).await?;
+
+    let major = details
+        .java_version
+        .map(|jv| jv.major_version)
+        .unwrap_or(8); // Versions without javaVersion field default to Java 8
+
+    println!("[Command] Version {} requires Java {}", version, major);
+    Ok(major)
 }

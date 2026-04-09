@@ -57,6 +57,35 @@ Update version
 ```bash
 node update_version.cjs 0.1.1
 ```
+## Solución de Problemas
+
+### `cargo` no encontrado (`program not found`)
+
+Rust no está instalado o no está en el PATH. Instálalo con:
+
+```powershell
+winget install Rustlang.Rustup
+```
+
+Después **reinicia la terminal**. Si no quieres reiniciarla, añade `cargo` al PATH de la sesión actual:
+
+```powershell
+$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+cargo --version
+```
+
+### `link.exe` no encontrado (linker de MSVC)
+
+Rust en Windows necesita el linker de MSVC. Instala las C++ Build Tools ejecutando esto en una terminal **como administrador**:
+
+```powershell
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --quiet --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+La instalación puede tardar varios minutos. Una vez finalizada, **reinicia la terminal** y vuelve a ejecutar `npm run tauri dev`.
+
+> Si ya tienes Visual Studio instalado, puedes añadir el componente **"Desarrollo para el escritorio con C++"** desde el Instalador de Visual Studio.
+
 ## Tecnologías
 
 *   [Tauri](https://tauri.app/) - Framework para aplicaciones de escritorio

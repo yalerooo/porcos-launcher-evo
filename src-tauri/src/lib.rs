@@ -29,6 +29,7 @@ pub fn run() {
             commands::launcher::get_available_versions,
             commands::launcher::launch_minecraft,
             commands::launcher::generate_offline_uuid,
+            commands::launcher::get_required_java_version,
             commands::instances::create_instance,
             commands::instances::get_instances,
             commands::instances::update_instance,

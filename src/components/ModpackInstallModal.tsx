@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { join, appCacheDir, homeDir } from '@tauri-apps/api/path';
 import { useLauncherStore } from '@/stores/launcherStore';
+import { CURSEFORGE_HEADERS } from '@/lib/constants';
 import styles from './ModpackInstallModal.module.css';
 
 // Force re-render
@@ -306,10 +307,7 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                 const url = `https://api.curseforge.com/v1/mods/${modpack.id}/files`;
                 const responseText = await invoke('fetch_cors', { 
                     url,
-                    headers: {
-                        'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC',
-                        'Accept': 'application/json'
-                    }
+                    headers: CURSEFORGE_HEADERS
                 }) as string;
                 const parsed = JSON.parse(responseText);
                 data = parsed.data;
@@ -1102,7 +1100,7 @@ const ModpackInstallModal: React.FC<ModpackInstallModalProps> = ({ isOpen, onClo
                                 const cfUrl = `https://api.curseforge.com/v1/mods/${mod.projectID!}/files/${mod.fileID!}`;
                                 const resp = await invoke('fetch_cors', { 
                                     url: cfUrl,
-                                    headers: { 'x-api-key': '$2a$10$/Dc9lilNTw0EvobjzoQLWu7zJpqX38hahG/jugi41F39z08R1rMZC' }
+                                    headers: CURSEFORGE_HEADERS
                                 }) as string;
                                 const fileData = JSON.parse(resp).data;
                                 url = fileData.downloadUrl;

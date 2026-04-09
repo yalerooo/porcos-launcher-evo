@@ -5,6 +5,7 @@ import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherSt
 import { useAuthStore } from '@/stores/authStore';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { parseVersion } from '@/lib/versionParser';
 import styles from './Instances.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceDetails from '@/components/InstanceDetails';
@@ -33,14 +34,14 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
 
     const handleVersionChange = async (version: string) => {
         // Check if it's a complex version
-        const complexVersionMatch = version.match(/^(.*) \((.*) (.*)\)$/);
+        const parsed = parseVersion(version);
         let newModLoader = instance.modLoader;
         let newModLoaderVersion = instance.modLoaderVersion;
 
-        if (complexVersionMatch) {
+        if (parsed.loader) {
             // It's a complex version, update global state to match
-            newModLoader = complexVersionMatch[2];
-            newModLoaderVersion = complexVersionMatch[3];
+            newModLoader = parsed.loader;
+            newModLoaderVersion = parsed.loaderVersion;
         } else {
             // It's a simple version.
             // Assume Vanilla if no suffix, unless it's the exact same string as current (which implies no change)
@@ -200,6 +201,10 @@ const Instances: React.FC = () => {
         memoryMax,
         setSelectedInstance,
         setLaunchStartTime,
+        launchStage,
+        launchProgress,
+        setLaunchStage,
+        setLaunchProgress,
         imageCacheVersion
     } = useLauncherStore();
     const { user } = useAuthStore();
@@ -213,6 +218,58 @@ const Instances: React.FC = () => {
 
     React.useEffect(() => {
         loadData();
+    }, []);
+
+    // Event listeners for launch progress
+    const maxProgressRef = React.useRef(0);
+
+    useEffect(() => {
+        const unlisteners: (() => void)[] = [];
+
+        const setupListeners = async () => {
+            try {
+                const { listen } = await import('@tauri-apps/api/event');
+                
+                const unlistenLaunch = await listen('launch-progress', (event: any) => {
+                    const { stage, progress } = event.payload;
+                    setLaunchStage(stage);
+                    
+                    // Never let progress go backwards
+                    if (progress >= maxProgressRef.current) {
+                        maxProgressRef.current = progress;
+                        setLaunchProgress(progress);
+                    }
+                    
+                    if (progress === 100 && (stage.includes("Juego iniciado") || stage.includes("Game"))) {
+                        setTimeout(() => {
+                            setIsLaunching(false);
+                            maxProgressRef.current = 0;
+                        }, 2000);
+                    }
+                });
+                unlisteners.push(unlistenLaunch);
+
+                const unlistenDownload = await listen('download-progress', (event: any) => {
+                    const { id, progress } = event.payload;
+                    if (id && id.startsWith('java-download-')) {
+                        const javaVer = id.replace('java-download-', '');
+                        // Java download progress doesn't affect maxProgressRef
+                        setLaunchProgress(progress);
+                        setLaunchStage(t('downloadingJava', { version: javaVer, progress: Math.round(progress) }));
+                    }
+                });
+                unlisteners.push(unlistenDownload);
+
+            } catch (error) {
+                console.error("Failed to setup event listeners:", error);
+            }
+        };
+
+        setupListeners();
+
+        return () => {
+            unlisteners.forEach(u => u());
+        };
     }, []);
 
     const loadData = async () => {
@@ -349,53 +406,238 @@ const Instances: React.FC = () => {
         setSelectedInstance(instance);
         setIsLaunching(true);
         setLaunchStartTime(Date.now());
-        addLog(`Launching instance: ${instance.name} (${instance.version})...`);
+        setLaunchStage(t('preparing'));
+        setLaunchProgress(0);
+        maxProgressRef.current = 0;
+
+        // Check for Porcos updates
+        try {
+            const { invoke } = await import("@tauri-apps/api/core");
+            const { join, appCacheDir } = await import("@tauri-apps/api/path");
+            const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
+            const porcosJsonPath = await join(instancePath, 'porcos.json');
+            
+            const exists = await invoke('file_exists', { path: porcosJsonPath }) as boolean;
+            if (exists) {
+                setLaunchStage(t('searchingUpdates'));
+                const content = await invoke('read_text_file', { path: porcosJsonPath }) as string;
+                let porcosData = JSON.parse(content);
+                
+                if (porcosData.updateUrl) {
+                    const responseText = await invoke('fetch_cors', { url: porcosData.updateUrl }) as string;
+                    const data = JSON.parse(responseText);
+                    
+                    if (data.modpacks) {
+                        const versionsArr = data.modpacks.filter((mp: any) => mp.id === porcosData.id);
+                        versionsArr.sort((a: any, b: any) => a.version.localeCompare(b.version, undefined, { numeric: true }));
+                        
+                        const currentIndex = versionsArr.findIndex((v: any) => v.version === porcosData.version);
+                        
+                        if (currentIndex !== -1 && currentIndex < versionsArr.length - 1) {
+                            const updates = versionsArr.slice(currentIndex + 1);
+                            const cacheDir = await appCacheDir();
+                            const tempDir = await join(cacheDir, 'temp_updates');
+                            
+                            for (const update of updates) {
+                                setLaunchStage(t('updatingToVersion', { version: update.version }));
+                                addLog(`Applying update ${update.version}...`);
+                                
+                                const downloadUrls = [];
+                                if (update.downloadUrl) downloadUrls.push(update.downloadUrl);
+                                
+                                let urlIndex = 2;
+                                while (update[`downloadUrl${urlIndex}`]) {
+                                    downloadUrls.push(update[`downloadUrl${urlIndex}`]);
+                                    urlIndex++;
+                                }
+                                
+                                const zipPaths = [];
+                                for (let i = 0; i < downloadUrls.length; i++) {
+                                    const url = downloadUrls[i];
+                                    const fileName = url.split('/').pop() || `update_${i}.zip`;
+                                    const filePath = await join(tempDir, fileName);
+                                    await invoke('download_file', { url, path: filePath });
+                                    zipPaths.push(filePath);
+                                }
+                                
+                                const skipFiles = ["servers.dat"];
+                                for (const zipPath of zipPaths) {
+                                    await invoke('extract_zip', { 
+                                        zipPath, 
+                                        targetDir: instancePath,
+                                        skipFiles: skipFiles
+                                    });
+                                }
+                                
+                                if (update.filesToDelete && Array.isArray(update.filesToDelete)) {
+                                    for (const fileToDelete of update.filesToDelete) {
+                                        const fullPath = await join(instancePath, fileToDelete);
+                                        if (await invoke('file_exists', { path: fullPath })) {
+                                            await invoke('delete_file', { path: fullPath });
+                                        }
+                                    }
+                                }
+                                
+                                porcosData.version = update.version;
+                                await invoke('write_text_file', { 
+                                    path: porcosJsonPath, 
+                                    content: JSON.stringify(porcosData) 
+                                });
+                            }
+                            addLog("Updates applied successfully.");
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Porcos update check failed", e);
+            addLog(`Update check failed: ${e}`);
+        }
+
+        const versionString = instance.selectedVersion || instance.version;
+        addLog(`Launching instance: ${instance.name} (${versionString})...`);
+
+        const parsedLaunch = parseVersion(versionString);
+        let versionToPlay = parsedLaunch.mcVersion;
+        let loaderToUse = parsedLaunch.loader || instance.modLoader;
+        let loaderVersionToUse = parsedLaunch.loaderVersion || instance.modLoaderVersion;
+
+        if (parsedLaunch.loader) {
+            console.log(`[Launch] Detected complex version: MC=${versionToPlay}, Loader=${loaderToUse}, Ver=${loaderVersionToUse}`);
+        }
 
         try {
             const { invoke } = await import("@tauri-apps/api/core");
-            const instancePath = await invoke("get_instance_path", { id: instance.id });
+            const { join, appDataDir } = await import("@tauri-apps/api/path");
             
+            const instancePath = await invoke("get_instance_path", { id: instance.id });
+            addLog(`Instance path: ${instancePath}`);
+
+            // Determine Java version
+            setLaunchStage(t('checkingJavaVersion') || 'Checking required Java version...');
+            let requiredJavaMajor: number;
+            try {
+                requiredJavaMajor = await invoke('get_required_java_version', { version: versionToPlay }) as number;
+                addLog(`Mojang manifest requires Java ${requiredJavaMajor} for MC ${versionToPlay}`);
+            } catch (e) {
+                addLog(`Failed to get Java version from manifest, falling back to hardcoded mapping: ${e}`);
+                const versionParts = versionToPlay.split('.');
+                const major = parseInt(versionParts[0]);
+                let minor = 0;
+                let patch = 0;
+                if (versionParts.length >= 2) minor = parseInt(versionParts[1]);
+                if (versionParts.length >= 3) patch = parseInt(versionParts[2]);
+
+                if (major >= 2) {
+                    requiredJavaMajor = 25;
+                } else if (minor <= 16) {
+                    requiredJavaMajor = 8;
+                } else if (minor === 17) {
+                    requiredJavaMajor = 16;
+                } else if (minor >= 18 && minor <= 20) {
+                    requiredJavaMajor = (minor === 20 && patch >= 5) ? 21 : 17;
+                } else {
+                    requiredJavaMajor = 21;
+                }
+            }
+
+            const appData = await appDataDir();
+            const roamingDir = await join(appData, '..');
+            const porcosDir = await join(roamingDir, '.porcos');
+            const runtimeDir = await join(porcosDir, 'runtime');
+            
+            const javaLabel = `Java ${requiredJavaMajor}`;
+            const javaId = `java-download-${requiredJavaMajor}`;
+            const javaZipName = `java${requiredJavaMajor}.zip`;
+
+            const javaUrl = `https://api.adoptium.net/v3/binary/latest/${requiredJavaMajor}/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk`;
+
+            let javaDirName = '';
+            let javaPath = '';
+            try {
+                const runtimeFiles = await invoke('list_files', { path: runtimeDir }) as { name: string, is_dir: boolean }[];
+                const jdkDir = runtimeFiles.find(f => f.is_dir && f.name.startsWith(`jdk-${requiredJavaMajor}`));
+                if (jdkDir) {
+                    javaDirName = jdkDir.name;
+                    javaPath = await join(runtimeDir, javaDirName, 'bin', 'java.exe');
+                    if (!await invoke('file_exists', { path: javaPath })) {
+                        javaDirName = '';
+                        javaPath = '';
+                    }
+                }
+            } catch {
+                // runtime dir may not exist yet
+            }
+
+            if (!javaPath) {
+                addLog(`${javaLabel} not found. Downloading from Adoptium...`);
+                setLaunchStage(t('downloadingJavaLabel', { label: javaLabel }));
+                setLaunchProgress(0);
+                
+                const zipPath = await join(runtimeDir, javaZipName);
+                
+                await invoke('download_file', { 
+                    url: javaUrl, 
+                    path: zipPath, 
+                    id: javaId 
+                });
+                
+                setLaunchStage(t('extractingJava', { label: javaLabel }));
+                await invoke('extract_zip', { zipPath, targetDir: runtimeDir });
+                await invoke('delete_file', { path: zipPath });
+
+                const runtimeFiles = await invoke('list_files', { path: runtimeDir }) as { name: string, is_dir: boolean }[];
+                const jdkDir = runtimeFiles.find(f => f.is_dir && f.name.startsWith(`jdk-${requiredJavaMajor}`));
+                if (jdkDir) {
+                    javaDirName = jdkDir.name;
+                    javaPath = await join(runtimeDir, javaDirName, 'bin', 'java.exe');
+                } else {
+                    throw new Error(`Failed to find extracted JDK directory for Java ${requiredJavaMajor}`);
+                }
+
+                addLog(`${javaLabel} installed successfully at ${javaDirName}.`);
+            }
+
             let uuid = user.uuid;
             if (user.mode === 'offline' && !uuid) {
                 uuid = await invoke("generate_offline_uuid", { username: user.username });
             }
 
             const options = {
-                version: instance.version,
-                modLoader: instance.modLoader || null,
-                modLoaderVersion: instance.modLoaderVersion || null,
+                version: versionToPlay,
+                mod_loader: loaderToUse,
+                mod_loader_version: loaderVersionToUse,
                 auth: user.mode === 'microsoft' ? {
                     Microsoft: {
                         access_token: user.accessToken || '',
                         uuid: uuid,
-                        username: user.username,
-                        xuid: user.xuid || '0'
+                        username: user.username
                     }
                 } : {
                     Offline: {
                         uuid: uuid,
-                        username: user.username,
-                        xuid: '0'
+                        username: user.username
                     }
                 },
-                memoryMin: `${memoryMin}G`,
-                memoryMax: `${memoryMax}G`,
-                javaPath: null,
-                minecraftDir: instancePath
+                memory_min: `${memoryMin}G`,
+                memory_max: `${memoryMax}G`,
+                java_path: javaPath,
+                minecraft_dir: instancePath
             };
 
-            await invoke("launch_minecraft", { options });
+            addLog("Launch options: " + JSON.stringify(options, null, 2));
+            
+            const result = await invoke("launch_minecraft", { options });
+            addLog("Launch result: " + JSON.stringify(result));
 
         } catch (error) {
             console.error("Launch failed:", error);
             addLog(`Launch failed: ${error}`);
-            setToastType('error');
-            setToastMessage(typeof error === 'string' ? error : "Error al iniciar el juego");
-            setTimeout(() => setToastMessage(null), 5000);
             setIsLaunching(false);
             setLaunchStartTime(null);
-        } finally {
-            // setIsLaunching(false); // Don't reset here, wait for game exit
+            setToastType('error');
+            setToastMessage(typeof error === 'string' ? error : t('errorLaunching'));
+            setTimeout(() => setToastMessage(null), 5000);
         }
     };
 
@@ -419,6 +661,33 @@ const Instances: React.FC = () => {
                             onBack={() => setViewingSettingsInstance(null)}
                             preloadedIconSrc={settingsCachedImages?.icon}
                         />
+                    )}
+                </AnimatePresence>
+                {/* Launching Progress Overlay */}
+                <AnimatePresence>
+                    {isLaunching && (
+                        <motion.div
+                            key="launch-progress-overlay-detail"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className={styles.launchOverlay}
+                        >
+                            <div className={styles.launchContent}>
+                                <div className={styles.launchHeader}>
+                                    <span className={styles.launchStage}>{launchStage}</span>
+                                    <span className={styles.launchPercent}>{Math.round(launchProgress)}%</span>
+                                </div>
+                                <div className={styles.launchBarTrack}>
+                                    <motion.div 
+                                        className={styles.launchBarFill}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${launchProgress}%` }}
+                                        transition={{ ease: "linear" }}
+                                    />
+                                </div>
+                            </div>
+                        </motion.div>
                     )}
                 </AnimatePresence>
             </>
@@ -564,6 +833,34 @@ const Instances: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/* Launching Progress Overlay */}
+            <AnimatePresence>
+                {isLaunching && (
+                    <motion.div
+                        key="launch-progress-overlay"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        className={styles.launchOverlay}
+                    >
+                        <div className={styles.launchContent}>
+                            <div className={styles.launchHeader}>
+                                <span className={styles.launchStage}>{launchStage}</span>
+                                <span className={styles.launchPercent}>{Math.round(launchProgress)}%</span>
+                            </div>
+                            <div className={styles.launchBarTrack}>
+                                <motion.div 
+                                    className={styles.launchBarFill}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${launchProgress}%` }}
+                                    transition={{ ease: "linear" }}
+                                />
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Toast Notification */}
             <AnimatePresence>
                 {toastMessage && (
