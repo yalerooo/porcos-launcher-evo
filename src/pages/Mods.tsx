@@ -16,8 +16,6 @@ import { useInstalledMods } from '@/hooks/useInstalledMods';
 import { useModInstall } from '@/hooks/useModInstall';
 import { useModUpdates } from '@/hooks/useModUpdates';
 
-// Force refresh check
-console.log("Mods Page Loaded - Timestamp:", Date.now());
 import styles from './Mods.module.css';
 
 const InstanceDropdownIcon = ({ instance }: { instance: any }) => {

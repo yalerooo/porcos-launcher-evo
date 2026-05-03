@@ -12,25 +12,24 @@ import styles from './Home.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceSettings from '@/components/InstanceSettings';
 
-const InstanceIcon = ({ instance, isActive }: { instance: Instance, isActive: boolean }) => {
-    const imageCacheVersion = useLauncherStore(state => state.imageCacheVersion);
+const InstanceIcon = React.memo(({ instance, isActive }: { instance: Instance, isActive: boolean }) => {
     const cached = getCachedImages(instance.id);
     const [src, setSrc] = useState(cached.icon || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
 
-    // Sync with cache when it becomes available (triggered by imageCacheVersion change)
+    // Sync with cache when instance changes (NOT when global imageCacheVersion changes)
     useEffect(() => {
         const cached = getCachedImages(instance.id);
         if (cached.icon) setSrc(cached.icon);
-    }, [instance.id, instance.icon, instance.backgroundImage, imageCacheVersion]);
+    }, [instance.id, instance.icon, instance.backgroundImage]);
 
     return (
         <div className={cn(
             "w-12 h-12 rounded-2xl overflow-hidden transition-all duration-300 relative shadow-lg",
-            isActive 
-                ? "ring-0 opacity-100 scale-105" 
+            isActive
+                ? "ring-0 opacity-100 scale-105"
                 : "opacity-40 hover:opacity-100 grayscale hover:grayscale-0 hover:scale-110"
         )}>
-            <img 
+            <img
                 src={src}
                 alt={instance.name}
                 className="w-full h-full object-cover select-none"
@@ -39,20 +38,27 @@ const InstanceIcon = ({ instance, isActive }: { instance: Instance, isActive: bo
             />
         </div>
     );
-};
+});
 
 
 
 const Home: React.FC = () => {
     const { t } = useI18n();
-    const { 
-        instances, selectedInstance, isLaunching, setIsLaunching, addLog, 
-        memoryMin, memoryMax, setSelectedInstance, updateInstance,
-        launchStage, launchProgress, setLaunchStage, setLaunchProgress,
-        versions, setVersions, setInstances,
-        setLaunchStartTime,
-        imageCacheVersion
-    } = useLauncherStore();
+
+    // Individual selectors to prevent unnecessary re-renders
+    const instances = useLauncherStore(state => state.instances);
+    const selectedInstance = useLauncherStore(state => state.selectedInstance);
+    const isLaunching = useLauncherStore(state => state.isLaunching);
+    const memoryMin = useLauncherStore(state => state.memoryMin);
+    const memoryMax = useLauncherStore(state => state.memoryMax);
+    const launchStage = useLauncherStore(state => state.launchStage);
+    const launchProgress = useLauncherStore(state => state.launchProgress);
+    const versions = useLauncherStore(state => state.versions);
+    const imageCacheVersion = useLauncherStore(state => state.imageCacheVersion);
+
+    // Setters can still be destructured together (they don't cause re-renders)
+    const { setSelectedInstance, updateInstance, setIsLaunching, setLaunchStage, setLaunchProgress, setInstances, setVersions, setLaunchStartTime, addLog } = useLauncherStore();
+
     const { user } = useAuthStore();
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [isMainVersionDropdownOpen, setIsMainVersionDropdownOpen] = useState(false);
@@ -1098,13 +1104,11 @@ const Home: React.FC = () => {
                                             <span className={styles.launchStage}>{launchStage}</span>
                                             <span className={styles.launchPercent}>{Math.round(launchProgress)}%</span>
                                         </div>
-                                        
+
                                         <div className={styles.launchBarTrack}>
-                                            <motion.div 
+                                            <div
                                                 className={styles.launchBarFill}
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${launchProgress}%` }}
-                                                transition={{ ease: "linear" }}
+                                                style={{ width: `${launchProgress}%` }}
                                             />
                                         </div>
                                     </div>

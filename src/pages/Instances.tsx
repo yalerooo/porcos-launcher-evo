@@ -21,10 +21,9 @@ interface InstanceCardProps {
     onDelete: (e: React.MouseEvent, id: string) => void;
     onUpdate: (id: string, updates: Partial<Instance>) => void;
     isLaunching: boolean;
-    imageCacheVersion: number;
 }
 
-const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, onPlay, onDelete, onUpdate, isLaunching, imageCacheVersion }) => {
+const InstanceCard: React.FC<InstanceCardProps> = React.memo(({ instance, index, onClick, onPlay, onDelete, onUpdate, isLaunching }) => {
     const { t } = useI18n();
     // Get cached images from global store
     const cached = getCachedImages(instance.id);
@@ -46,7 +45,7 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
             // It's a simple version.
             // Assume Vanilla if no suffix, unless it's the exact same string as current (which implies no change)
             const currentVersionString = instance.selectedVersion || instance.version;
-            
+
             if (version === currentVersionString) {
                 newModLoader = instance.modLoader;
                 newModLoaderVersion = instance.modLoaderVersion;
@@ -64,8 +63,8 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                 modLoader: newModLoader || null,
                 modLoaderVersion: newModLoaderVersion || null
             });
-            
-            onUpdate(instance.id, { 
+
+            onUpdate(instance.id, {
                 selectedVersion: version,
                 modLoader: newModLoader,
                 modLoaderVersion: newModLoaderVersion
@@ -75,12 +74,12 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
         }
     };
 
-    // Sync with cached images when instance or cache version changes
+    // Sync with cached images when instance changes (NOT when imageCacheVersion changes globally)
     useEffect(() => {
         const cached = getCachedImages(instance.id);
         if (cached.icon) setIconSrc(cached.icon);
         if (cached.thumbnail) setBgSrc(cached.thumbnail);
-    }, [instance.id, instance.icon, instance.backgroundImage, imageCacheVersion]);
+    }, [instance.id, instance.icon, instance.backgroundImage]);
 
     return (
         <motion.div
@@ -103,11 +102,11 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                     <div className={styles.cardIcon}>
                         <img src={iconSrc} alt="" />
                     </div>
-                    
+
                     <div className={styles.cardInfo}>
                         <h3 className={styles.cardTitle} title={instance.name}>{instance.name}</h3>
                         <div className={styles.cardMeta}>
-                            <div 
+                            <div
                                 className={cn(styles.loaderBadge, "relative cursor-pointer hover:bg-white/10 transition-colors")}
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -164,7 +163,7 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
 
                 {/* Footer Actions */}
                 <div className={styles.cardFooter}>
-                    <button 
+                    <button
                         className={styles.playButton}
                         onClick={(e) => onPlay(e, instance)}
                         disabled={isLaunching}
@@ -172,7 +171,7 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
                         {isLaunching ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
                         {t('play')}
                     </button>
-                    <button 
+                    <button
                         className={styles.deleteButton}
                         onClick={(e) => onDelete(e, instance.id)}
                         title={t('deleteInstance')}
@@ -183,30 +182,23 @@ const InstanceCard: React.FC<InstanceCardProps> = ({ instance, index, onClick, o
             </div>
         </motion.div>
     );
-};
+});
 
 const Instances: React.FC = () => {
     const { t } = useI18n();
-    const {
-        instances,
-        removeInstance,
-        setInstances,
-        updateInstance,
-        versions,
-        setVersions,
-        isLaunching,
-        setIsLaunching,
-        addLog,
-        memoryMin,
-        memoryMax,
-        setSelectedInstance,
-        setLaunchStartTime,
-        launchStage,
-        launchProgress,
-        setLaunchStage,
-        setLaunchProgress,
-        imageCacheVersion
-    } = useLauncherStore();
+
+    // Individual selectors to prevent unnecessary re-renders
+    const instances = useLauncherStore(state => state.instances);
+    const versions = useLauncherStore(state => state.versions);
+    const isLaunching = useLauncherStore(state => state.isLaunching);
+    const launchStage = useLauncherStore(state => state.launchStage);
+    const launchProgress = useLauncherStore(state => state.launchProgress);
+    const memoryMin = useLauncherStore(state => state.memoryMin);
+    const memoryMax = useLauncherStore(state => state.memoryMax);
+
+    // Setters (don't cause re-renders)
+    const { removeInstance, setInstances, updateInstance, setVersions, setIsLaunching, addLog, setSelectedInstance, setLaunchStartTime, setLaunchStage, setLaunchProgress } = useLauncherStore();
+
     const { user } = useAuthStore();
 
     const [showCreateModal, setShowCreateModal] = React.useState(false);
@@ -395,8 +387,11 @@ const Instances: React.FC = () => {
         }
     };
 
-    const filteredInstances = instances.filter(instance => 
-        instance.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredInstances = React.useMemo(() =>
+        instances.filter(instance =>
+            instance.name.toLowerCase().includes(searchTerm.toLowerCase())
+        ),
+        [instances, searchTerm]
     );
 
     const handlePlayInstance = async (e: React.MouseEvent, instance: Instance) => {
@@ -679,11 +674,9 @@ const Instances: React.FC = () => {
                                     <span className={styles.launchPercent}>{Math.round(launchProgress)}%</span>
                                 </div>
                                 <div className={styles.launchBarTrack}>
-                                    <motion.div 
+                                    <div
                                         className={styles.launchBarFill}
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${launchProgress}%` }}
-                                        transition={{ ease: "linear" }}
+                                        style={{ width: `${launchProgress}%` }}
                                     />
                                 </div>
                             </div>
@@ -740,7 +733,7 @@ const Instances: React.FC = () => {
 
                     {/* Instance Cards */}
                     {filteredInstances.map((instance, index) => (
-                        <InstanceCard 
+                        <InstanceCard
                             key={instance.id}
                             instance={instance}
                             index={index}
@@ -749,7 +742,6 @@ const Instances: React.FC = () => {
                             onDelete={handleDeleteInstance}
                             onUpdate={updateInstance}
                             isLaunching={isLaunching}
-                            imageCacheVersion={imageCacheVersion}
                         />
                     ))}
                 </div>
@@ -849,11 +841,9 @@ const Instances: React.FC = () => {
                                 <span className={styles.launchPercent}>{Math.round(launchProgress)}%</span>
                             </div>
                             <div className={styles.launchBarTrack}>
-                                <motion.div 
+                                <div
                                     className={styles.launchBarFill}
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${launchProgress}%` }}
-                                    transition={{ ease: "linear" }}
+                                    style={{ width: `${launchProgress}%` }}
                                 />
                             </div>
                         </div>

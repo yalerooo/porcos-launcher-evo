@@ -62,51 +62,54 @@ export default function MainLayout({
       crashReport 
   } = useLauncherStore();
 
-  // Polling for crash reports (Global)
+  // Polling for crash reports (Global) - reduced frequency as backup to event-based detection
   useEffect(() => {
       if (!isLaunching || !selectedInstance || !launchStartTime) return;
+
+      // Poll every 30 seconds instead of 2 - events handle most cases
+      const POLL_INTERVAL = 30000;
+      const bufferMs = 5000;
 
       const interval = setInterval(async () => {
           try {
               const { invoke } = await import("@tauri-apps/api/core");
               const { join } = await import("@tauri-apps/api/path");
-              
+
               const instancePath = await invoke("get_instance_path", { id: selectedInstance.id }) as string;
               const crashReportsDir = await join(instancePath, "crash-reports");
-              
+
               const exists = await invoke("file_exists", { path: crashReportsDir }) as boolean;
               if (!exists) return;
 
               const files = await invoke("list_files", { path: crashReportsDir }) as {name: string, is_dir: boolean}[];
-              
+
               // Filter for txt files
               const reports = files.filter(f => f.name.endsWith(".txt") && f.name.startsWith("crash-"));
-              
+
               for (const report of reports) {
                   // Parse timestamp from filename: crash-YYYY-MM-DD_HH.MM.SS-client.txt
                   const match = report.name.match(/crash-(\d{4})-(\d{2})-(\d{2})_(\d{2})\.(\d{2})\.(\d{2})-client\.txt/);
                   if (match) {
                       const [_, year, month, day, hour, minute, second] = match;
                       const reportDate = new Date(
-                          parseInt(year), 
-                          parseInt(month) - 1, 
-                          parseInt(day), 
-                          parseInt(hour), 
-                          parseInt(minute), 
+                          parseInt(year),
+                          parseInt(month) - 1,
+                          parseInt(day),
+                          parseInt(hour),
+                          parseInt(minute),
                           parseInt(second)
                       );
-                      
-                      // Check if report is newer than launch start time (with 5s buffer)
-                      if (reportDate.getTime() > launchStartTime - 5000) {
+
+                      // Check if report is newer than launch start time (with buffer)
+                      if (reportDate.getTime() > launchStartTime - bufferMs) {
                           console.log("Found new crash report via polling:", report.name);
-                          addLog(`Frontend Polling: Found crash report ${report.name}`);
-                          
+
                           const fullPath = await join(crashReportsDir, report.name);
                           const content = await invoke("read_text_file", { path: fullPath }) as string;
-                          
+
                           setCrashReport({ path: fullPath, content });
                           setIsLaunching(false);
-                          setLaunchStartTime(null); // Stop polling
+                          setLaunchStartTime(null);
                           clearInterval(interval);
                           return;
                       }
@@ -115,7 +118,7 @@ export default function MainLayout({
           } catch (e) {
               console.error("Polling error:", e);
           }
-      }, 2000);
+      }, POLL_INTERVAL);
 
       return () => clearInterval(interval);
   }, [isLaunching, selectedInstance, launchStartTime]);

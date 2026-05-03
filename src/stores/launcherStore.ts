@@ -15,11 +15,28 @@ const BACKGROUNDS = [
 ];
 
 // Global image cache (module level, persists across renders)
+const MAX_CACHE_SIZE = 100; // Max entries per cache type
 const imageCache = {
     icons: new Map<string, string>(),
     thumbnails: new Map<string, string>(),
     backgrounds: new Map<string, string>(),
 };
+
+// Helper to add to cache with LRU-like eviction
+function addToCache(cache: Map<string, string>, key: string, value: string) {
+    // If key exists, delete it first (will be re-added at end)
+    if (cache.has(key)) {
+        cache.delete(key);
+    }
+    // If cache is full, remove oldest entry (first key in iterator)
+    if (cache.size >= MAX_CACHE_SIZE) {
+        const firstKey = cache.keys().next().value;
+        if (firstKey !== undefined) {
+            cache.delete(firstKey);
+        }
+    }
+    cache.set(key, value);
+}
 
 // Helper to resolve image source
 async function resolveImageSource(
@@ -70,34 +87,34 @@ async function preloadInstanceImages(instance: Instance): Promise<void> {
     const iconKey = `${instance.id}-icon`;
     const thumbKey = `${instance.id}-thumb`;
     const bgKey = `${instance.id}-bg`;
-    
+
     // Only load if not already cached
     const promises: Promise<void>[] = [];
-    
+
     if (!imageCache.icons.has(iconKey)) {
         promises.push(
             resolveImageSource(instance, 'icon').then(src => {
-                imageCache.icons.set(iconKey, src);
+                addToCache(imageCache.icons, iconKey, src);
             })
         );
     }
-    
+
     if (!imageCache.thumbnails.has(thumbKey)) {
         promises.push(
             resolveImageSource(instance, 'thumbnail').then(src => {
-                imageCache.thumbnails.set(thumbKey, src);
+                addToCache(imageCache.thumbnails, thumbKey, src);
             })
         );
     }
-    
+
     if (!imageCache.backgrounds.has(bgKey)) {
         promises.push(
             resolveImageSource(instance, 'background').then(src => {
-                imageCache.backgrounds.set(bgKey, src);
+                addToCache(imageCache.backgrounds, bgKey, src);
             })
         );
     }
-    
+
     await Promise.all(promises);
 }
 
@@ -130,6 +147,8 @@ export interface Instance {
     created: number;
 }
 
+const MAX_CONSOLE_LINES = 500;
+
 interface LauncherState {
     versions: any[];
     instances: Instance[];
@@ -144,7 +163,8 @@ interface LauncherState {
     consoleOutput: string[];
     crashReport: { path: string, content: string } | null;
     imageCacheVersion: number; // Incremented when images are cached to trigger re-renders
-    
+    logCount: number; // Counter for log updates to avoid array copies
+
     setVersions: (versions: any[]) => void;
     setInstances: (instances: Instance[]) => void;
     addInstance: (instance: Instance) => void;
@@ -180,6 +200,7 @@ export const useLauncherStore = create<LauncherState>()(
             consoleOutput: [],
             crashReport: null,
             imageCacheVersion: 0,
+            logCount: 0,
 
             setVersions: (versions) => set({ versions }),
             setInstances: (instances) => {
@@ -229,10 +250,21 @@ export const useLauncherStore = create<LauncherState>()(
             setLaunchStage: (launchStage) => set({ launchStage }),
             setLaunchProgress: (launchProgress) => set({ launchProgress }),
             setLaunchStartTime: (launchStartTime) => set({ launchStartTime }),
-            addLog: (message) => set((state) => ({ 
-                consoleOutput: [...state.consoleOutput, `[${new Date().toLocaleTimeString()}] ${message}`] 
-            })),
-            clearLogs: () => set({ consoleOutput: [] }),
+            addLog: (message) => {
+                const newLine = `[${new Date().toLocaleTimeString()}] ${message}`;
+                set((state) => {
+                    const newOutput = [...state.consoleOutput, newLine];
+                    // Limit array size to prevent memory issues and re-render lag
+                    if (newOutput.length > MAX_CONSOLE_LINES) {
+                        newOutput.shift(); // Remove oldest line
+                    }
+                    return { 
+                        consoleOutput: newOutput,
+                        logCount: state.logCount + 1
+                    };
+                });
+            },
+            clearLogs: () => set({ consoleOutput: [], logCount: 0 }),
             setCrashReport: (crashReport) => set({ crashReport }),
             preloadAllImages: async () => {
                 const instances = get().instances;
