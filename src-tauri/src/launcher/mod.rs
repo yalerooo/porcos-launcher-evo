@@ -4,6 +4,8 @@ pub mod version_details;
 pub mod asset_manager;
 pub mod library_manager;
 pub mod java_detector;
+#[cfg(windows)]
+pub mod window_detector;
 
 pub use minecraft_launcher::{MinecraftLauncher, LaunchOptions, LaunchResult};
 pub use version_manager::{VersionManager, MinecraftVersion};

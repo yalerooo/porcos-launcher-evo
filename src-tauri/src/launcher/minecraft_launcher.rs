@@ -1,8 +1,10 @@
+use crate::errors::{LauncherError, LaunchError, NetworkError, IoError};
+use crate::{log_error, log_warn, log_info, log_debug};
 use crate::launcher::VersionDetails;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{Emitter, Window};
-// use std::process::Child;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthData {
@@ -37,7 +39,7 @@ pub struct LaunchOptions {
     pub minecraft_dir: Option<PathBuf>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct LoaderManifest {
     id: String,
     #[serde(rename = "inheritsFrom")]
@@ -46,6 +48,12 @@ struct LoaderManifest {
     main_class: String,
     libraries: Vec<crate::launcher::version_details::Library>,
     arguments: Option<crate::launcher::version_details::Arguments>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CachedLoaderProfile {
+    cached_at: String,
+    manifest: LoaderManifest,
 }
 
 #[derive(Debug, Serialize)]
@@ -91,6 +99,94 @@ impl MinecraftLauncher {
         &self.minecraft_dir
     }
 
+    fn get_loader_profiles_dir(&self) -> PathBuf {
+        self.minecraft_dir.join("loader_profiles")
+    }
+
+    fn extract_instance_id(&self) -> Option<String> {
+        self.minecraft_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|s| s.to_string())
+    }
+
+    fn save_loader_profile_cache(&self, loader_type: &str, loader_version: &str, manifest: &LoaderManifest) -> Result<(), std::io::Error> {
+        let profiles_dir = self.get_loader_profiles_dir();
+        std::fs::create_dir_all(&profiles_dir)?;
+
+        let cache = CachedLoaderProfile {
+            cached_at: chrono::Utc::now().to_rfc3339(),
+            manifest: manifest.clone(),
+        };
+
+        let json = serde_json::to_string_pretty(&cache)?;
+        let cache_file = profiles_dir.join(format!("{}-{}.json", loader_type, loader_version));
+        std::fs::write(cache_file, json)
+    }
+
+    fn load_loader_profile_from_cache(&self, loader_type: &str, loader_version: &str) -> Option<CachedLoaderProfile> {
+        let cache_file = self.get_loader_profiles_dir().join(format!("{}-{}.json", loader_type, loader_version));
+        if cache_file.exists() {
+            if let Ok(cached) = std::fs::read_to_string(&cache_file) {
+                if let Ok(cached_obj) = serde_json::from_str::<CachedLoaderProfile>(&cached) {
+                    log_info!("Loaded cached {} profile for {}", loader_type, loader_version);
+                    return Some(cached_obj);
+                }
+            }
+        }
+        None
+    }
+
+    fn refresh_loader_profile_background(&self, loader_type: &str, game_version: &str, loader_version: &str) {
+        let profiles_dir = self.get_loader_profiles_dir();
+        let url = match loader_type {
+            "fabric" => format!("https://meta.fabricmc.net/v2/versions/loader/{}/{}/profile/json", game_version, loader_version),
+            "quilt" => format!("https://meta.quiltmc.org/v3/versions/loader/{}/{}/profile/json", game_version, loader_version),
+            _ => return,
+        };
+
+        let client = reqwest::Client::builder()
+            .user_agent("PorcosLauncher/1.0")
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_default();
+
+        let loader_type_str = loader_type.to_string();
+        let loader_version_str = loader_version.to_string();
+        let profiles_dir_clone = profiles_dir.clone();
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().ok();
+            if let Some(mut rt) = rt {
+                rt.block_on(async {
+                    match client.get(&url).send().await {
+                        Ok(response) if response.status().is_success() => {
+                            match response.json::<LoaderManifest>().await {
+                                Ok(manifest) => {
+                                    let cache = CachedLoaderProfile {
+                                        cached_at: chrono::Utc::now().to_rfc3339(),
+                                        manifest,
+                                    };
+                                    if let Ok(json) = serde_json::to_string_pretty(&cache) {
+                                        let cache_file = profiles_dir_clone.join(format!("{}-{}.json", loader_type_str, loader_version_str));
+                                        let _ = std::fs::write(cache_file, json);
+                                    }
+                                }
+                                Err(e) => {
+                                    log_warn!("Failed to parse {} profile for background refresh: {}", loader_type_str, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log_warn!("Background refresh failed for {} profile: {}", loader_type_str, e);
+                        }
+                        _ => {}
+                    }
+                });
+            }
+        });
+    }
+
     fn emit_progress(&self, stage: &str, current: u64, total: u64, percent: f64) {
         if let Some(window) = &self.window {
             let event = ProgressEvent {
@@ -104,15 +200,15 @@ impl MinecraftLauncher {
         }
     }
 
-    pub async fn launch(&self, options: LaunchOptions) -> Result<LaunchResult, String> {
-        println!("[MinecraftLauncher] ========== LAUNCHING MINECRAFT ==========");
-        println!("[MinecraftLauncher] Version: {}", options.version);
+    pub async fn launch(&self, options: LaunchOptions) -> Result<LaunchResult, LauncherError> {
+        log_info!("========== LAUNCHING MINECRAFT ==========");
+        log_info!("Version: {}", options.version);
         if let Some(loader) = &options.mod_loader {
-            println!("[MinecraftLauncher] Mod Loader: {} ({})", loader, options.mod_loader_version.as_deref().unwrap_or("?"));
+            log_info!("Mod Loader: {} ({})", loader, options.mod_loader_version.as_deref().unwrap_or("?"));
         }
-        println!("[MinecraftLauncher] Auth: {:?}", options.auth);
-        println!("[MinecraftLauncher] Memory: {} - {}", options.memory_min, options.memory_max);
-        
+        log_info!("Auth: {:?}", options.auth);
+        log_info!("Memory: {} - {}", options.memory_min, options.memory_max);
+
         self.emit_progress("Iniciando lanzador...", 0, 100, 0.0);
 
         // 1. Get version manifest to find version URL
@@ -122,19 +218,25 @@ impl MinecraftLauncher {
         
         println!("[MinecraftLauncher] Fetching version manifest...");
         self.emit_progress("Obteniendo manifiesto de versiones...", 5, 100, 1.0);
-        let manifest = version_manager.fetch_version_manifest().await?;
-        
+        let manifest = version_manager.fetch_version_manifest().await
+            .map_err(|e| LauncherError::Launch(LaunchError::VersionManifestFailed))?;
+
         let version_info = manifest.versions.iter()
             .find(|v| v.id == options.version)
-            .ok_or_else(|| format!("Version {} not found", options.version))?;
-        
-        println!("[MinecraftLauncher] Version URL: {}", version_info.url);
+            .ok_or_else(|| LaunchError::version_not_found(&options.version))?;
+
+        log_info!("Version URL: {}", version_info.url);
         
         // Fetch full version details
         self.emit_progress("Obteniendo detalles de versión...", 10, 100, 2.0);
-        let mut version_details = version_manager.fetch_version_details(&version_info.url).await?;
+        let mut version_details = version_manager.fetch_version_details(&version_info.url).await
+            .map_err(|e| LaunchError::VersionDetailsFailed { reason: e.to_string() })?;
         let version_dir = self.minecraft_dir.join("versions").join(&options.version);
-        std::fs::create_dir_all(&version_dir).map_err(|e| format!("Failed to create version dir: {}", e))?;
+        std::fs::create_dir_all(&version_dir)
+            .map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: version_dir.to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })?;
 
         // --- MOD LOADER HANDLING ---
         if let (Some(loader), Some(loader_version)) = (&options.mod_loader, &options.mod_loader_version) {
@@ -149,7 +251,7 @@ impl MinecraftLauncher {
             };
 
             if let Some(manifest) = loader_manifest {
-                println!("[MinecraftLauncher] Applying mod loader manifest: {}", manifest.id);
+                log_info!("Applying mod loader manifest: {}", manifest.id);
                 // Override main class
                 version_details.main_class = manifest.main_class;
                 
@@ -189,39 +291,51 @@ impl MinecraftLauncher {
         println!("[MinecraftLauncher] Downloading assets...");
         // AssetManager handles 0-20%
         asset_manager.download_assets(&version_details.asset_index.id, &version_details.asset_index.url).await?;
-        
+
         // Download client jar
         let client_jar_path = version_dir.join(format!("{}.jar", options.version));
         if !client_jar_path.exists() {
-             println!("[MinecraftLauncher] Downloading client jar...");
+             log_info!("Downloading client jar...");
              self.emit_progress("Descargando cliente...", 80, 100, 20.0);
-             self.download_file(&version_details.downloads.client.url, &client_jar_path).await?;
+             self.download_single_file(&version_details.downloads.client.url, &client_jar_path).await?;
         }
 
         // 5. Download libraries and extract natives (following nitrolaunch exactly)
-        println!("[MinecraftLauncher] Processing libraries...");
+        log_info!("Processing libraries...");
         self.emit_progress("Procesando librerías...", 85, 100, 22.0);
         let libraries_dir = self.minecraft_dir.join("libraries");
         let natives_dir = version_dir.join("natives");
         let natives_jars_dir = self.minecraft_dir.join("natives"); // Separate folder for native JARs
-        
+
         std::fs::create_dir_all(&libraries_dir)
-            .map_err(|e| format!("Failed to create libraries directory: {}", e))?;
+            .map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: libraries_dir.to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })?;
         std::fs::create_dir_all(&natives_jars_dir)
-            .map_err(|e| format!("Failed to create natives jars directory: {}", e))?;
-            
+            .map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: natives_jars_dir.to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })?;
+
         // Clean natives directory to ensure no leftovers
         if natives_dir.exists() {
             std::fs::remove_dir_all(&natives_dir)
-                .map_err(|e| format!("Failed to clean natives directory: {}", e))?;
+                .map_err(|e| LaunchError::VersionDirCreationFailed {
+                    path: natives_dir.to_string_lossy().to_string(),
+                    cause: format!("Failed to clean natives dir: {}", e),
+                })?;
         }
         std::fs::create_dir_all(&natives_dir)
-            .map_err(|e| format!("Failed to create natives directory: {}", e))?;
+            .map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: natives_dir.to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })?;
         
         let mut classpath_entries = vec![client_jar_path.to_string_lossy().to_string()];
         
         let total_libs = version_details.libraries.len() as u64;
-        let mut processed_libs = 0;
+        let mut processed_libs = 0u64;
 
         for library in &version_details.libraries {
             processed_libs += 1;
@@ -232,7 +346,7 @@ impl MinecraftLauncher {
                 self.emit_progress("Verificando librerías...", processed_libs, total_libs, global_progress);
             }
 
-            println!("[MinecraftLauncher] Checking library: {}", library.name);
+            log_debug!("Checking library: {}", library.name);
 
             if !VersionDetails::should_use_library(library) {
                 continue;
@@ -255,44 +369,44 @@ impl MinecraftLauncher {
                 if let Some(key) = native_classifier_key {
                     if let Some(classifiers) = &downloads.classifiers {
                         if let Some(native_artifact) = classifiers.get(key) {
-                            println!("[MinecraftLauncher] Processing native library: {} ({})", library.name, key);
-                            
+                            log_debug!("Processing native library: {} ({})", library.name, key);
+
                             // Download native jar to natives-jars directory (using the path from the artifact)
                             let path_in_artifact = native_artifact.path.as_ref()
-                                .ok_or_else(|| format!("Native artifact missing path field: {}", library.name))?;
+                                .ok_or_else(|| LaunchError::library_failed(&library.name, "Native artifact missing path field"))?;
                             let native_jar_path = natives_jars_dir.join(path_in_artifact);
                             if !native_jar_path.exists() {
                                 if let Some(parent) = native_jar_path.parent() {
                                     std::fs::create_dir_all(parent).ok();
                                 }
-                                println!("[MinecraftLauncher] Downloading native JAR from: {}", native_artifact.url);
-                                self.download_file(&native_artifact.url, &native_jar_path).await?;
+                                log_info!("Downloading native JAR from: {}", native_artifact.url);
+                                self.download_file_with_retry(&native_artifact.url, &native_jar_path).await?;
                             }
-                            
+
                             // Add native JAR to classpath
                             classpath_entries.push(native_jar_path.to_string_lossy().to_string());
-                            
+
                             // Extract native jar to natives directory
                             let excludes = library.extract.as_ref().map(|e| e.exclude.clone()).unwrap_or_default();
-                            println!("[MinecraftLauncher] Extracting native JAR: {:?}", native_jar_path);
+                            log_debug!("Extracting native JAR: {:?}", native_jar_path);
                             self.extract_native(&native_jar_path, &natives_dir, &excludes)?;
                             
                             // Also download the artifact (main JAR) if it exists
                             if let Some(artifact) = &downloads.artifact {
                                 let path_in_artifact = artifact.path.as_ref()
-                                    .ok_or_else(|| format!("Artifact missing path field: {}", library.name))?;
+                                    .ok_or_else(|| LaunchError::library_failed(&library.name, "Artifact missing path field"))?;
                                 let lib_path = libraries_dir.join(path_in_artifact);
-                                
+
                                 if !lib_path.exists() {
                                     if let Some(parent) = lib_path.parent() {
                                         std::fs::create_dir_all(parent).ok();
                                     }
-                                    self.download_file(&artifact.url, &lib_path).await?;
+                                    self.download_file_with_retry(&artifact.url, &lib_path).await?;
                                 }
-                                
+
                                 classpath_entries.push(lib_path.to_string_lossy().to_string());
                             }
-                            
+
                             continue; // Skip artifact-only processing
                         }
                     }
@@ -301,64 +415,62 @@ impl MinecraftLauncher {
                 // Regular library or library without native classifiers - just download artifact
                 if let Some(artifact) = &downloads.artifact {
                     let path_in_artifact = artifact.path.as_ref()
-                        .ok_or_else(|| format!("Artifact missing path field: {}", library.name))?;
+                        .ok_or_else(|| LaunchError::library_failed(&library.name, "Artifact missing path field"))?;
                     let lib_path = libraries_dir.join(path_in_artifact);
-                    
+
                     if !lib_path.exists() {
                         if let Some(parent) = lib_path.parent() {
                             std::fs::create_dir_all(parent).ok();
                         }
-                        self.download_file(&artifact.url, &lib_path).await?;
+                        self.download_file_with_retry(&artifact.url, &lib_path).await?;
                     }
-                    
+
                     classpath_entries.push(lib_path.to_string_lossy().to_string());
                 }
             } else {
                 // Library without downloads section (Maven style)
                 let maven_url = library.url.as_deref().unwrap_or("https://libraries.minecraft.net/");
-                
+
                 // Fix for Maven Central blocking HTTP (501 Not Implemented)
                 let maven_url = if maven_url.starts_with("http://repo.maven.apache.org") {
                     maven_url.replace("http://repo.maven.apache.org", "https://repo.maven.apache.org")
                 } else if maven_url.starts_with("http://") {
                     // Upgrade other known repos to https if possible, or just try to use https generally
-                    maven_url.replace("http://", "https://") 
+                    maven_url.replace("http://", "https://")
                 } else {
                     maven_url.to_string()
                 };
 
                 let path = self.get_relative_library_path(&library.name);
                 let full_url = format!("{}{}", maven_url, path.to_string_lossy().replace("\\", "/"));
-                
+
                 let lib_path = libraries_dir.join(&path);
                 if !lib_path.exists() {
                     if let Some(parent) = lib_path.parent() {
                         std::fs::create_dir_all(parent).ok();
                     }
-                    println!("[MinecraftLauncher] Downloading library (maven): {}", full_url);
-                    if let Err(e) = self.download_file(&full_url, &lib_path).await {
-                        println!("[MinecraftLauncher] Failed to download library {}: {}", library.name, e);
-                        // If it fails, it might be a local library (generated).
-                        // We should check if it exists locally anyway.
+                    log_info!("Downloading library (maven): {}", full_url);
+                    if let Err(e) = self.download_file_with_retry(&full_url, &lib_path).await {
+                        log_warn!("Failed to download library {}: {}", library.name, e);
                     }
                 }
                 if lib_path.exists() {
                     classpath_entries.push(lib_path.to_string_lossy().to_string());
                 } else {
-                    println!("[MinecraftLauncher] WARNING: Library not found and download failed: {}", library.name);
+                    log_warn!("WARNING: Library not found and download failed: {}", library.name);
                 }
             }
         }
-        
+
         // Debug: List natives directory
-        println!("[MinecraftLauncher] Natives directory: {:?}", natives_dir);
+        log_debug!("Natives directory: {:?}", natives_dir);
         if let Ok(entries) = std::fs::read_dir(&natives_dir) {
-            println!("[MinecraftLauncher] Natives found:");
+            log_debug!("Natives found:");
             for entry in entries.flatten() {
-                println!("  - {:?}", entry.file_name());
+                log_debug!("  - {:?}", entry.file_name());
             }
         } else {
-             println!("[MinecraftLauncher] Warning: Could not read natives directory!");
+             log_warn!("Warning: Could not read natives directory!");
         }
 
         // 6. Find Java
@@ -367,10 +479,11 @@ impl MinecraftLauncher {
         let java_path = if let Some(custom_java) = options.java_path {
             custom_java
         } else {
-            java_detector::find_java()?
+            java_detector::find_java()
+                .map_err(|_| LaunchError::java_not_found("17"))?
         };
-        
-        println!("[MinecraftLauncher] Using Java: {:?}", java_path);
+
+        log_info!("Using Java: {:?}", java_path);
         
         // 7. Build arguments
         let (username, uuid, xuid) = match &options.auth {
@@ -525,65 +638,50 @@ impl MinecraftLauncher {
         // Set working directory to game directory
         command.current_dir(&self.minecraft_dir);
 
-        println!("[MinecraftLauncher] Launching game process...");
-        println!("[MinecraftLauncher] Command: {:?}", command);
+        log_info!("Launching game process...");
+        log_debug!("Command: {:?}", command);
         self.emit_progress("Iniciando proceso del juego...", 98, 100, 95.0);
-        
+
         // 8. Launch the game!
         // Configure stdout to be piped
         command.stdout(std::process::Stdio::piped());
-        
+
         let mut child = command
             .spawn()
-            .map_err(|e| format!("Failed to spawn Minecraft process: {}", e))?;
-        
+            .map_err(|e| LaunchError::spawn_failed(e.to_string()))?;
+
         let process_id = child.id();
-        println!("[MinecraftLauncher] ✅ Minecraft launched! PID: {}", process_id);
+        log_info!("Minecraft launched successfully! PID: {}", process_id);
         
-        // Spawn a thread to monitor stdout
+        // Spawn a thread to monitor stdout (logs only)
         if let Some(stdout) = child.stdout.take() {
             let window_clone = self.window.clone();
             let minecraft_dir = self.minecraft_dir.clone();
-            
+
             std::thread::spawn(move || {
                 use std::io::{BufRead, BufReader};
                 let reader = BufReader::new(stdout);
-                let mut game_started = false;
-                
+
                 for line in reader.lines() {
                     if let Ok(line) = line {
-                        // Emit game output event (optional, for console)
                         if let Some(window) = &window_clone {
                             let _ = window.emit("game-output", line.clone());
-                            
-                            // Check for Render thread (Game Ready)
-                            if !game_started && (line.contains("[Render thread/INFO]:") || line.contains("Sound engine started")) {
-                                game_started = true;
-                                let event = ProgressEvent {
-                                    stage: "¡Juego iniciado!".to_string(),
-                                    progress: 100.0,
-                                    total: 100,
-                                    current: 100,
-                                };
-                                let _ = window.emit("launch-progress", event);
-                            }
                         }
-                        println!("[Game] {}", line);
+                        log_debug!("[Game] {}", line);
                     }
                 }
 
                 // Wait for process to exit and check for crash
                 match child.wait() {
                     Ok(status) => {
-                        println!("[MinecraftLauncher] Process finished. Exit code: {:?}", status.code());
-                        
+                        log_info!("Process finished. Exit code: {:?}", status.code());
+
                         if !status.success() {
-                            println!("[MinecraftLauncher] Game exited with error. Checking for crash reports...");
-                            
-                            // Look for crash reports
+                            log_warn!("Game exited with error. Checking for crash reports...");
+
                             let crash_reports_dir = minecraft_dir.join("crash-reports");
-                            println!("[MinecraftLauncher] Checking directory: {:?}", crash_reports_dir);
-                            
+                            log_debug!("Checking directory: {:?}", crash_reports_dir);
+
                             if crash_reports_dir.exists() {
                                 if let Ok(entries) = std::fs::read_dir(&crash_reports_dir) {
                                     let mut reports: Vec<_> = entries
@@ -596,10 +694,9 @@ impl MinecraftLauncher {
                                             }
                                         })
                                         .collect();
-                                    
-                                    println!("[MinecraftLauncher] Found {} potential crash report files.", reports.len());
 
-                                    // Sort by modification time (newest first)
+                                    log_debug!("Found {} potential crash report files.", reports.len());
+
                                     reports.sort_by(|a, b| {
                                         let a_time = a.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
                                         let b_time = b.metadata().and_then(|m| m.modified()).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
@@ -608,72 +705,90 @@ impl MinecraftLauncher {
 
                                     if let Some(latest) = reports.first() {
                                         let report_path = latest.path();
-                                        println!("[MinecraftLauncher] Latest report file: {:?}", report_path);
-                                        
-                                        // Check if it's recent (e.g. within last 5 minutes)
+                                        log_debug!("Latest report file: {:?}", report_path);
+
                                         if let Ok(metadata) = latest.metadata() {
                                             if let Ok(modified) = metadata.modified() {
                                                 if let Ok(elapsed) = modified.elapsed() {
-                                                    println!("[MinecraftLauncher] File modified {:?} ago.", elapsed);
+                                                    log_debug!("File modified {:?} ago.", elapsed);
                                                     if elapsed.as_secs() < 300 {
-                                                        println!("[MinecraftLauncher] Crash report is recent. Reading content...");
-                                                        // It's likely the crash report for this session
+                                                        log_info!("Crash report is recent. Reading content...");
                                                         if let Ok(content) = std::fs::read_to_string(&report_path) {
                                                             let msg = format!("[Game] #@!@# Game crashed! Crash report saved to: #@!@# {}", report_path.to_string_lossy());
                                                             if let Some(window) = &window_clone {
                                                                 let _ = window.emit("game-output", msg.clone());
-                                                                // let _ = window.emit("game-output", content.clone()); // Don't spam console with full report
-                                                                
-                                                                // Emit structured crash event
-                                                                println!("[MinecraftLauncher] Emitting game-crashed event to frontend...");
+                                                                log_info!("Emitting game-crashed event to frontend...");
                                                                 let emit_result = window.emit("game-crashed", CrashReportEvent {
                                                                     path: report_path.to_string_lossy().to_string(),
                                                                     content: content.clone()
                                                                 });
-                                                                
                                                                 if let Err(e) = emit_result {
-                                                                    println!("[MinecraftLauncher] Failed to emit game-crashed: {}", e);
-                                                                } else {
-                                                                    println!("[MinecraftLauncher] game-crashed event emitted successfully.");
+                                                                    log_error!("Failed to emit game-crashed: {}", e);
                                                                 }
                                                             }
-                                                            println!("{}", msg);
-                                                        } else {
-                                                            println!("[MinecraftLauncher] Failed to read crash report content.");
                                                         }
-                                                    } else {
-                                                        println!("[MinecraftLauncher] Crash report is too old (> 300s). Ignoring.");
                                                     }
                                                 }
                                             }
                                         }
-                                    } else {
-                                        println!("[MinecraftLauncher] No crash reports found in directory.");
                                     }
-                                } else {
-                                    println!("[MinecraftLauncher] Failed to read crash-reports directory.");
                                 }
-                            } else {
-                                println!("[MinecraftLauncher] crash-reports directory does not exist.");
                             }
                         }
 
-                        // Emit game exited event to ensure frontend state is reset
                         if let Some(window) = &window_clone {
-                             println!("[MinecraftLauncher] Emitting game-exited event...");
-                             let _ = window.emit("game-exited", ());
+                            let _ = window.emit("game-exited", ());
                         }
                     },
                     Err(e) => {
-                        println!("[MinecraftLauncher] Failed to wait for child process: {}", e);
+                        log_error!("Failed to wait for child process: {}", e);
                         if let Some(window) = &window_clone {
-                             let _ = window.emit("game-exited", ());
+                            let _ = window.emit("game-exited", ());
                         }
                     },
                 }
             });
         }
-        
+
+        // Spawn a thread to detect Minecraft window visibility via Windows API
+        let window_clone = self.window.clone();
+        std::thread::spawn(move || {
+            #[cfg(windows)]
+            {
+                use crate::launcher::window_detector::wait_for_minecraft_window;
+
+                let event = ProgressEvent {
+                    stage: "¡Juego iniciado!".to_string(),
+                    progress: 100.0,
+                    total: 100,
+                    current: 100,
+                };
+
+                if wait_for_minecraft_window(process_id) {
+                    if let Some(window) = &window_clone {
+                        let _ = window.emit("launch-progress", event);
+                    }
+                } else {
+                    if let Some(window) = &window_clone {
+                        let _ = window.emit("launch-progress", event);
+                    }
+                }
+            }
+
+            #[cfg(not(windows))]
+            {
+                let event = ProgressEvent {
+                    stage: "¡Juego iniciado!".to_string(),
+                    progress: 100.0,
+                    total: 100,
+                    current: 100,
+                };
+                if let Some(window) = &window_clone {
+                    let _ = window.emit("launch-progress", event);
+                }
+            }
+        });
+
         Ok(LaunchResult {
             success: true,
             message: format!("Minecraft launched successfully (PID: {})", process_id),
@@ -681,96 +796,164 @@ impl MinecraftLauncher {
         })
     }
 
-    async fn get_fabric_profile(&self, game_version: &str, loader_version: &str) -> Result<LoaderManifest, String> {
+    async fn get_fabric_profile(&self, game_version: &str, loader_version: &str) -> Result<LoaderManifest, LauncherError> {
+        if let Some(cached) = self.load_loader_profile_from_cache("fabric", loader_version) {
+            log_info!("Using cached Fabric profile for {}", loader_version);
+            self.refresh_loader_profile_background("fabric", game_version, loader_version);
+            return Ok(cached.manifest);
+        }
+
         let url = format!("https://meta.fabricmc.net/v2/versions/loader/{}/{}/profile/json", game_version, loader_version);
-        let response = self.http_client.get(&url).send().await.map_err(|e| e.to_string())?;
+        log_info!("Fetching Fabric profile from: {}", url);
+        let response = self.http_client.get(&url).send().await
+            .map_err(|e| LaunchError::ModLoaderProfileNotFound {
+                loader: "fabric".to_string(),
+                version: format!("{} ({})", loader_version, e),
+            })?;
         if !response.status().is_success() {
-            return Err(format!("Failed to fetch Fabric profile: {}", response.status()));
+            return Err(LauncherError::Launch(LaunchError::mod_loader_profile_not_found("fabric", loader_version)));
         }
-        response.json().await.map_err(|e| e.to_string())
+        let manifest = response.json().await
+            .map_err(|e| LauncherError::Launch(LaunchError::mod_loader_install_failed("fabric", e.to_string())))?;
+
+        if let Err(e) = self.save_loader_profile_cache("fabric", loader_version, &manifest) {
+            log_warn!("Failed to cache Fabric profile: {}", e);
+        }
+
+        Ok(manifest)
     }
 
-    async fn get_quilt_profile(&self, game_version: &str, loader_version: &str) -> Result<LoaderManifest, String> {
+    async fn get_quilt_profile(&self, game_version: &str, loader_version: &str) -> Result<LoaderManifest, LauncherError> {
+        if let Some(cached) = self.load_loader_profile_from_cache("quilt", loader_version) {
+            log_info!("Using cached Quilt profile for {}", loader_version);
+            self.refresh_loader_profile_background("quilt", game_version, loader_version);
+            return Ok(cached.manifest);
+        }
+
         let url = format!("https://meta.quiltmc.org/v3/versions/loader/{}/{}/profile/json", game_version, loader_version);
-        let response = self.http_client.get(&url).send().await.map_err(|e| e.to_string())?;
+        log_info!("Fetching Quilt profile from: {}", url);
+        let response = self.http_client.get(&url).send().await
+            .map_err(|e| LaunchError::ModLoaderProfileNotFound {
+                loader: "quilt".to_string(),
+                version: format!("{} ({})", loader_version, e),
+            })?;
         if !response.status().is_success() {
-            return Err(format!("Failed to fetch Quilt profile: {}", response.status()));
+            return Err(LauncherError::Launch(LaunchError::mod_loader_profile_not_found("quilt", loader_version)));
         }
-        response.json().await.map_err(|e| e.to_string())
+        let manifest = response.json().await
+            .map_err(|e| LauncherError::Launch(LaunchError::mod_loader_install_failed("quilt", e.to_string())))?;
+
+        if let Err(e) = self.save_loader_profile_cache("quilt", loader_version, &manifest) {
+            log_warn!("Failed to cache Quilt profile: {}", e);
+        }
+
+        Ok(manifest)
     }
 
-    async fn get_neoforge_profile(&self, _game_version: &str, loader_version: &str) -> Result<LoaderManifest, String> {
+    async fn get_neoforge_profile(&self, _game_version: &str, loader_version: &str) -> Result<LoaderManifest, LauncherError> {
         // Construct installer URL
         let url = if loader_version.starts_with("1.20.1") {
              format!("https://maven.neoforged.net/releases/net/neoforged/forge/{}/forge-{}-installer.jar", loader_version, loader_version)
         } else {
              format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{}/neoforge-{}-installer.jar", loader_version, loader_version)
         };
-        
+
         // Download to temp file
         let temp_dir = std::env::temp_dir();
         let installer_path = temp_dir.join(format!("neoforge-{}-installer.jar", loader_version));
-        
-        println!("[MinecraftLauncher] Downloading NeoForge installer: {}", url);
-        self.download_file(&url, &installer_path).await?;
+
+        log_info!("Downloading NeoForge installer: {}", url);
+        self.download_file_with_retry(&url, &installer_path).await
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Download failed: {}", e),
+            })?;
 
         // Run the installer to generate libraries
         self.install_neoforge_client(&installer_path).await?;
-        
+
         // Extract client.json
-        let file = std::fs::File::open(&installer_path).map_err(|e| e.to_string())?;
-        let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-        
+        let file = std::fs::File::open(&installer_path)
+            .map_err(|e| LaunchError::neoforge_corrupted(e.to_string()))?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| LaunchError::neoforge_corrupted(e.to_string()))?;
+
         // Try "client.json" or "version.json"
         let mut content = String::new();
         let mut found = false;
 
         if let Ok(mut file) = archive.by_name("client.json") {
-            std::io::Read::read_to_string(&mut file, &mut content).map_err(|e| e.to_string())?;
+            std::io::Read::read_to_string(&mut file, &mut content)
+                .map_err(|e| LaunchError::neoforge_corrupted(e.to_string()))?;
             found = true;
         }
-        
+
         if !found {
             if let Ok(mut file) = archive.by_name("version.json") {
-                std::io::Read::read_to_string(&mut file, &mut content).map_err(|e| e.to_string())?;
+                std::io::Read::read_to_string(&mut file, &mut content)
+                    .map_err(|e| LaunchError::neoforge_corrupted(e.to_string()))?;
                 found = true;
             }
         }
 
         if !found {
-            return Err("Could not find client.json or version.json in NeoForge installer".to_string());
+            return Err(LauncherError::Launch(LaunchError::neoforge_corrupted("Could not find client.json or version.json in NeoForge installer")));
         }
-        
+
         // Parse
-        let manifest: LoaderManifest = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        
+        let manifest: LoaderManifest = serde_json::from_str(&content)
+            .map_err(|e| LauncherError::Launch(LaunchError::neoforge_corrupted(e.to_string())))?;
+
         Ok(manifest)
     }
 
-    async fn install_neoforge_client(&self, installer_path: &PathBuf) -> Result<(), String> {
-        println!("[MinecraftLauncher] Installing NeoForge client from {:?}", installer_path);
-        
+    async fn install_neoforge_client(&self, installer_path: &PathBuf) -> Result<(), LauncherError> {
+        log_info!("Installing NeoForge client from {:?}", installer_path);
+
         // 1. Determine package prefix by inspecting the jar
-        let file = std::fs::File::open(installer_path).map_err(|e| e.to_string())?;
-        let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-        
+        let file = std::fs::File::open(installer_path)
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Cannot open installer: {}", e),
+            })?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Cannot read installer ZIP: {}", e),
+            })?;
+
         let package_prefix = if archive.by_name("net/neoforged/installer/SimpleInstaller.class").is_ok() {
             "net.neoforged"
         } else if archive.by_name("net/minecraftforge/installer/SimpleInstaller.class").is_ok() {
             "net.minecraftforge"
         } else {
-            return Err("Unknown NeoForge installer structure (neither net.neoforged nor net.minecraftforge found)".to_string());
+            return Err(LauncherError::Launch(LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: "Unknown NeoForge installer structure (neither net.neoforged nor net.minecraftforge found)".to_string(),
+            }));
         };
-        
-        println!("[MinecraftLauncher] Detected NeoForge installer package: {}", package_prefix);
+
+        log_info!("Detected NeoForge installer package: {}", package_prefix);
 
         // 2. Create temp directory for installation
         let install_dir = std::env::temp_dir().join(format!("neoforge_install_{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&install_dir).map_err(|e| e.to_string())?;
-        
+        std::fs::create_dir_all(&install_dir)
+            .map_err(|e| LauncherError::Launch(LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Cannot create temp directory: {}", e),
+            }))?;
+
         // Create dummy launcher profiles to trick the installer
-        std::fs::write(install_dir.join("launcher_profiles.json"), "{}").map_err(|e| e.to_string())?;
-        std::fs::write(install_dir.join("launcher_profiles_microsoft_store.json"), "{}").map_err(|e| e.to_string())?;
+        std::fs::write(install_dir.join("launcher_profiles.json"), "{}")
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Cannot write launcher profiles: {}", e),
+            })?;
+        std::fs::write(install_dir.join("launcher_profiles_microsoft_store.json"), "{}")
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Cannot write launcher profiles: {}", e),
+            })?;
 
         // 3. Write the installer script
         let script_content = format!(r#"
@@ -807,113 +990,181 @@ public class NeoForgeInstaller {{
 "#, package_prefix);
 
         let script_path = install_dir.join("NeoForgeInstaller.java");
-        std::fs::write(&script_path, script_content).map_err(|e| e.to_string())?;
-        
+        std::fs::write(&script_path, script_content)
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Cannot write installer script: {}", e),
+            })?;
+
         // 4. Run the installer script
         // We need to find java again.
         use crate::launcher::java_detector;
-        let java_path = java_detector::find_java()?;
-        
-        println!("[MinecraftLauncher] Running NeoForge installer script...");
+        let java_path = java_detector::find_java()
+            .map_err(|_| LaunchError::java_not_found("17"))?;
+
+        log_info!("Running NeoForge installer script...");
         let output = std::process::Command::new(&java_path)
             .arg("-cp")
             .arg(installer_path) // Classpath: just the installer jar
             .arg(&script_path)   // Source file to run
             .current_dir(&install_dir) // Run in temp dir so libraries are generated there
             .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-            
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Failed to execute Java: {}", e),
+            })?;
+
         if !output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("[MinecraftLauncher] Installer STDOUT: {}", stdout);
-            println!("[MinecraftLauncher] Installer STDERR: {}", stderr);
-            return Err(format!("NeoForge installer failed with exit code {}", output.status));
+            log_error!("Installer STDOUT: {}", stdout);
+            log_error!("Installer STDERR: {}", stderr);
+            return Err(LauncherError::Launch(LaunchError::ModLoaderInstallFailed {
+                loader: "neoforge".to_string(),
+                reason: format!("Installer failed with exit code {}", output.status),
+            }));
         }
-        
+
         // 5. Copy generated libraries to the real libraries directory
         let generated_libs = install_dir.join("libraries");
         let target_libs = self.minecraft_dir.join("libraries");
-        
+
         if generated_libs.exists() {
-            println!("[MinecraftLauncher] Copying generated libraries to {:?}", target_libs);
+            log_info!("Copying generated libraries to {:?}", target_libs);
             self.copy_dir_all(&generated_libs, &target_libs)?;
         } else {
-            println!("[MinecraftLauncher] Warning: No libraries folder generated by installer!");
+            log_warn!("Warning: No libraries folder generated by installer!");
         }
-        
+
         // Cleanup
         let _ = std::fs::remove_dir_all(&install_dir);
-        
+
         Ok(())
     }
 
-    fn copy_dir_all(&self, src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
-        std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
-        for entry in std::fs::read_dir(src).map_err(|e| e.to_string())? {
-            let entry = entry.map_err(|e| e.to_string())?;
-            let ty = entry.file_type().map_err(|e| e.to_string())?;
+    fn copy_dir_all(&self, src: &PathBuf, dst: &PathBuf) -> Result<(), LauncherError> {
+        std::fs::create_dir_all(dst)
+            .map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: dst.to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })?;
+        for entry in std::fs::read_dir(src)
+            .map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: src.to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })? {
+            let entry = entry.map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: src.to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })?;
+            let ty = entry.file_type().map_err(|e| LaunchError::VersionDirCreationFailed {
+                path: entry.path().to_string_lossy().to_string(),
+                cause: e.to_string(),
+            })?;
             let src_path = entry.path();
             let dst_path = dst.join(entry.file_name());
-            
+
             if ty.is_dir() {
                 self.copy_dir_all(&src_path, &dst_path)?;
             } else {
-                std::fs::copy(&src_path, &dst_path).map_err(|e| e.to_string())?;
+                std::fs::copy(&src_path, &dst_path)
+                    .map_err(|e| LaunchError::VersionDirCreationFailed {
+                        path: dst_path.to_string_lossy().to_string(),
+                        cause: e.to_string(),
+                    })?;
             }
         }
         Ok(())
     }
 
-    async fn get_forge_profile(&self, game_version: &str, loader_version: &str) -> Result<LoaderManifest, String> {
+    async fn get_forge_profile(&self, game_version: &str, loader_version: &str) -> Result<LoaderManifest, LauncherError> {
         // URL format: https://maven.minecraftforge.net/net/minecraftforge/forge/{mc_ver}-{forge_ver}/forge-{mc_ver}-{forge_ver}-installer.jar
         let long_version = format!("{}-{}", game_version, loader_version);
         let url = format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{}/forge-{}-installer.jar", long_version, long_version);
-        
+
         let temp_dir = std::env::temp_dir();
         let installer_path = temp_dir.join(format!("forge-{}-installer.jar", long_version));
-        
-        println!("[MinecraftLauncher] Downloading Forge installer: {}", url);
-        self.download_file(&url, &installer_path).await?;
-        
+
+        log_info!("Downloading Forge installer: {}", url);
+        self.download_file_with_retry(&url, &installer_path).await
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Download failed: {}", e),
+            })?;
+
         // Run installer
         self.install_forge_client(&installer_path).await?;
 
-        let file = std::fs::File::open(&installer_path).map_err(|e| e.to_string())?;
-        let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-        
+        let file = std::fs::File::open(&installer_path)
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Cannot open installer: {}", e),
+            })?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Cannot read installer ZIP: {}", e),
+            })?;
+
         let mut content = String::new();
         let mut found = false;
 
         if let Ok(mut file) = archive.by_name("version.json") {
-            std::io::Read::read_to_string(&mut file, &mut content).map_err(|e| e.to_string())?;
+            std::io::Read::read_to_string(&mut file, &mut content)
+                .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                    loader: "forge".to_string(),
+                    reason: format!("Cannot read version.json: {}", e),
+                })?;
             found = true;
         }
-        
+
         if !found {
             if let Ok(mut file) = archive.by_name("install_profile.json") {
-                std::io::Read::read_to_string(&mut file, &mut content).map_err(|e| e.to_string())?;
+                std::io::Read::read_to_string(&mut file, &mut content)
+                    .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                        loader: "forge".to_string(),
+                        reason: format!("Cannot read install_profile.json: {}", e),
+                    })?;
                 found = true;
             }
         }
 
         if !found {
-            return Err("Could not find version.json in Forge installer".to_string());
+            return Err(LauncherError::Launch(LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: "Could not find version.json in Forge installer".to_string(),
+            }));
         }
-        
-        let manifest: LoaderManifest = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+        let manifest: LoaderManifest = serde_json::from_str(&content)
+            .map_err(|e| LauncherError::Launch(LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Failed to parse version.json: {}", e),
+            }))?;
         Ok(manifest)
     }
 
-    async fn install_forge_client(&self, installer_path: &PathBuf) -> Result<(), String> {
-        println!("[MinecraftLauncher] Installing Forge client from {:?}", installer_path);
-        
+    async fn install_forge_client(&self, installer_path: &PathBuf) -> Result<(), LauncherError> {
+        log_info!("Installing Forge client from {:?}", installer_path);
+
         let install_dir = std::env::temp_dir().join(format!("forge_install_{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&install_dir).map_err(|e| e.to_string())?;
-        
+        std::fs::create_dir_all(&install_dir)
+            .map_err(|e| LauncherError::Launch(LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Cannot create temp directory: {}", e),
+            }))?;
+
         // Dummy profiles
-        std::fs::write(install_dir.join("launcher_profiles.json"), "{}").map_err(|e| e.to_string())?;
-        std::fs::write(install_dir.join("launcher_profiles_microsoft_store.json"), "{}").map_err(|e| e.to_string())?;
+        std::fs::write(install_dir.join("launcher_profiles.json"), "{}")
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Cannot write launcher profiles: {}", e),
+            })?;
+        std::fs::write(install_dir.join("launcher_profiles_microsoft_store.json"), "{}")
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Cannot write launcher profiles: {}", e),
+            })?;
 
         let script_content = r#"
 import java.io.File;
@@ -948,36 +1199,47 @@ public class ForgeInstaller {
 }
 "#;
         let script_path = install_dir.join("ForgeInstaller.java");
-        std::fs::write(&script_path, script_content).map_err(|e| e.to_string())?;
-        
+        std::fs::write(&script_path, script_content)
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Cannot write installer script: {}", e),
+            })?;
+
         use crate::launcher::java_detector;
-        let java_path = java_detector::find_java()?;
-        
-        println!("[MinecraftLauncher] Running Forge installer script...");
+        let java_path = java_detector::find_java()
+            .map_err(|_| LaunchError::java_not_found("17"))?;
+
+        log_info!("Running Forge installer script...");
         let output = std::process::Command::new(&java_path)
             .arg("-cp")
             .arg(installer_path)
             .arg(&script_path)
             .current_dir(&install_dir)
             .output()
-            .map_err(|e| format!("Failed to execute Java: {}", e))?;
-            
+            .map_err(|e| LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Failed to execute Java: {}", e),
+            })?;
+
         if !output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("[MinecraftLauncher] Installer STDOUT: {}", stdout);
-            println!("[MinecraftLauncher] Installer STDERR: {}", stderr);
-            return Err(format!("Forge installer failed with exit code {}", output.status));
+            log_error!("Installer STDOUT: {}", stdout);
+            log_error!("Installer STDERR: {}", stderr);
+            return Err(LauncherError::Launch(LaunchError::ModLoaderInstallFailed {
+                loader: "forge".to_string(),
+                reason: format!("Installer failed with exit code {}", output.status),
+            }));
         }
-        
+
         let generated_libs = install_dir.join("libraries");
         let target_libs = self.minecraft_dir.join("libraries");
-        
+
         if generated_libs.exists() {
-            println!("[MinecraftLauncher] Copying generated libraries to {:?}", target_libs);
+            log_info!("Copying generated libraries to {:?}", target_libs);
             self.copy_dir_all(&generated_libs, &target_libs)?;
         }
-        
+
         let _ = std::fs::remove_dir_all(&install_dir);
         Ok(())
     }
@@ -994,24 +1256,30 @@ public class ForgeInstaller {
         }
     }
 
-    fn extract_native(&self, jar_path: &std::path::Path, output_dir: &std::path::Path, excludes: &[String]) -> Result<(), String> {
-        println!("[MinecraftLauncher] Extracting native jar: {:?}", jar_path);
+    fn extract_native(&self, jar_path: &std::path::Path, output_dir: &std::path::Path, excludes: &[String]) -> Result<(), LauncherError> {
+        log_debug!("Extracting native jar: {:?}", jar_path);
         let file = std::fs::File::open(jar_path)
-            .map_err(|e| format!("Failed to open native jar: {}", e))?;
-        
+            .map_err(|e| LaunchError::NativeExtractionFailed {
+                reason: format!("Cannot open native jar {:?}: {}", jar_path, e),
+            })?;
+
         let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| format!("Failed to read zip archive: {}", e))?;
-            
+            .map_err(|e| LaunchError::NativeExtractionFailed {
+                reason: format!("Cannot read ZIP archive: {}", e),
+            })?;
+
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)
-                .map_err(|e| format!("Failed to read zip file: {}", e))?;
-                
+                .map_err(|e| LaunchError::NativeExtractionFailed {
+                    reason: format!("Cannot read ZIP entry: {}", e),
+                })?;
+
             // Get the full path in the zip
             let full_path = match file.enclosed_name() {
                 Some(path) => path.to_owned(),
                 None => continue,
             };
-            
+
             // Skip META-INF
             if full_path.starts_with("META-INF") {
                 continue;
@@ -1022,7 +1290,7 @@ public class ForgeInstaller {
             if excludes.iter().any(|e| path_str.contains(e)) {
                 continue;
             }
-            
+
             // Only extract shared libraries (.dll, .so, .dylib)
             let extension = match full_path.extension() {
                 Some(ext) => ext.to_string_lossy().to_string(),
@@ -1039,23 +1307,29 @@ public class ForgeInstaller {
                 continue;
             }
 
-            // IMPORTANT: Keep the directory structure from the jar (like nitrolaunch does)
+            // Keep the directory structure from the jar
             let outpath = output_dir.join(&full_path);
-            println!("[MinecraftLauncher] Extracting {:?} to {:?}", full_path, outpath);
-            
+            log_debug!("Extracting {:?} to {:?}", full_path, outpath);
+
             // Create parent directories if needed
             if let Some(parent) = outpath.parent() {
                 std::fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent dir {:?}: {}", parent, e))?;
+                    .map_err(|e| LaunchError::NativeExtractionFailed {
+                        reason: format!("Cannot create parent dir {:?}: {}", parent, e),
+                    })?;
             }
-            
+
             // Create output file
             let mut outfile = std::fs::File::create(&outpath)
-                .map_err(|e| format!("Failed to create output file {:?}: {}", outpath, e))?;
+                .map_err(|e| LaunchError::NativeExtractionFailed {
+                    reason: format!("Cannot create output file {:?}: {}", outpath, e),
+                })?;
             std::io::copy(&mut file, &mut outfile)
-                .map_err(|e| format!("Failed to copy file content: {}", e))?;
+                .map_err(|e| LaunchError::NativeExtractionFailed {
+                    reason: format!("Cannot copy file content: {}", e),
+                })?;
         }
-        
+
         Ok(())
     }
 
@@ -1077,8 +1351,40 @@ public class ForgeInstaller {
         }
     }
 
-    async fn download_file(&self, url: &str, path: &std::path::Path) -> Result<(), String> {
-        // Fix for Maven Central and other repos blocking HTTP or needing HTTPS
+    async fn download_file_with_retry(&self, url: &str, path: &std::path::Path) -> Result<(), LauncherError> {
+        let mut delay = Duration::from_secs(1);
+        const MAX_RETRIES: u32 = 3;
+
+        for attempt in 1..=MAX_RETRIES {
+            match self.download_single_file(url, path).await {
+                Ok(_) => {
+                    log_info!("Download successful after {} attempt(s): {} -> {:?}", attempt, url, path);
+                    return Ok(());
+                }
+                Err(e) => {
+                    log_warn!("Download failed (attempt {}/{}): {} - {}",
+                        attempt, MAX_RETRIES, url, e);
+
+                    if !e.is_recoverable() || attempt == MAX_RETRIES {
+                        return Err(e);
+                    }
+                }
+            }
+
+            if attempt < MAX_RETRIES {
+                log_debug!("Retrying download in {:?}...", delay);
+                tokio::time::sleep(delay).await;
+                delay *= 2;
+            }
+        }
+
+        Err(LauncherError::Network(NetworkError::Unknown(format!(
+            "Max retries ({}) exceeded for download: {}",
+            MAX_RETRIES, url
+        ))))
+    }
+
+    async fn download_single_file(&self, url: &str, path: &std::path::Path) -> Result<(), LauncherError> {
         let url = if url.starts_with("http://repo.maven.apache.org") {
             url.replace("http://repo.maven.apache.org", "https://repo.maven.apache.org")
         } else if url.starts_with("http://libraries.minecraft.net") {
@@ -1091,27 +1397,33 @@ public class ForgeInstaller {
             url.to_string()
         };
 
-        println!("[MinecraftLauncher] Downloading file: {}", url);
+        log_debug!("Downloading file: {}", url);
         let response = self.http_client.get(&url)
             .send()
             .await
-            .map_err(|e| format!("Download failed (network): {}", e))?;
-        
+            .map_err(|e| LauncherError::Network(NetworkError::connection_failed(&url, e.to_string())))?;
+
         if !response.status().is_success() {
-            return Err(format!("Download failed with status: {} for URL: {}", response.status(), url));
+            return Err(LauncherError::Network(NetworkError::status_code(response.status().as_u16(), &url)));
         }
-        
-        let bytes = response.bytes()
-            .await
-            .map_err(|e| format!("Failed to read response: {}", e))?;
-        
+
+        let bytes = response.bytes().await
+            .map_err(|e| LauncherError::Network(NetworkError::read_error(&url, e.to_string())))?;
+
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| IoError::CreateDir {
+                    path: parent.to_string_lossy().to_string(),
+                    reason: e.to_string(),
+                })?;
         }
 
         std::fs::write(path, &bytes)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
-        
+            .map_err(|e| IoError::WriteError {
+                path: path.to_string_lossy().to_string(),
+                reason: e.to_string(),
+            })?;
+
         Ok(())
     }
 

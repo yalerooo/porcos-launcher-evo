@@ -1,5 +1,7 @@
 mod commands;
 mod launcher;
+mod errors;
+mod logging;
 
 use std::sync::Mutex;
 use tauri::async_runtime::spawn;
@@ -12,6 +14,10 @@ struct SetupState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if let Err(e) = logging::init_logging(None) {
+        eprintln!("Failed to initialize logging: {}", e);
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
