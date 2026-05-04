@@ -145,6 +145,8 @@ export interface Instance {
     icon?: string;
     backgroundImage?: string;
     created: number;
+    lastPlayed?: number; // Unix timestamp of last play time
+    isFavorite?: boolean;
 }
 
 const MAX_CONSOLE_LINES = 500;

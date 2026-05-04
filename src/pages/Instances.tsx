@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Trash2, Loader2, Search, Box, Cpu, ChevronDown, Check, AlertCircle, SearchX } from 'lucide-react';
+import { Plus, Play, Trash2, Loader2, Search, Cpu, Check, AlertCircle, SearchX, Settings, ChevronDown, CheckIcon, Clock, Star } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
-import { parseVersion } from '@/lib/versionParser';
+import { parseVersion, formatVersion } from '@/lib/versionParser';
 import styles from './Instances.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceDetails from '@/components/InstanceDetails';
 import InstanceSettings from '@/components/InstanceSettings';
-
-const DEFAULT_BG = '/assets/thumbnails/1353838.png';
 
 interface InstanceCardProps {
     instance: Instance;
@@ -23,29 +22,104 @@ interface InstanceCardProps {
     isLaunching: boolean;
 }
 
+interface VersionDropdownProps {
+    versions: string[];
+    currentVersion: string;
+    onVersionChange: (version: string) => void;
+    onClose: () => void;
+    wrapperRef: React.RefObject<HTMLDivElement | null>;
+}
+
+const VersionDropdown: React.FC<VersionDropdownProps> = ({ versions, currentVersion, onVersionChange, onClose, wrapperRef }) => {
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const wrapper = wrapperRef.current;
+            if (!wrapper || !dropdownRef.current) return;
+            if (!wrapper.contains(e.target as Node)) {
+                onClose();
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [onClose, wrapperRef]);
+
+    return (
+        <motion.div
+            ref={dropdownRef}
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className={styles.versionDropdown}
+        >
+            {versions.map((v) => {
+                const parsed = parseVersion(v);
+                const isActive = v === currentVersion;
+                return (
+                    <button
+                        key={v}
+                        className={cn(styles.versionDropdownItem, isActive && styles.versionDropdownItemActive)}
+                        onClick={() => {
+                            onVersionChange(v);
+                            onClose();
+                        }}
+                    >
+                        <div className={styles.versionDropdownMain}>
+                            <span className={styles.versionDropdownVersion}>{parsed.mcVersion}</span>
+                            {parsed.loader && (
+                                <span className={cn(styles.versionDropdownLoader, styles[`versionDropdownLoader${parsed.loader.charAt(0).toUpperCase() + parsed.loader.slice(1)}`])}>
+                                    {parsed.loader}
+                                </span>
+                            )}
+                        </div>
+                        {isActive && <CheckIcon size={14} className={styles.versionDropdownCheck} />}
+                    </button>
+                );
+            })}
+        </motion.div>
+    );
+};
+
+function formatTimeAgo(timestamp: number): string {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return days === 1 ? '1 día' : `${days} días`;
+    if (hours > 0) return hours === 1 ? '1 hora' : `${hours} horas`;
+    if (minutes > 0) return minutes === 1 ? '1 min' : `${minutes} mins`;
+    return 'Ahora';
+}
+
 const InstanceCard: React.FC<InstanceCardProps> = React.memo(({ instance, index, onClick, onPlay, onDelete, onUpdate, isLaunching }) => {
     const { t } = useI18n();
-    // Get cached images from global store
     const cached = getCachedImages(instance.id);
     const [iconSrc, setIconSrc] = useState(cached.icon || "https://www.minecraft.net/content/dam/games/minecraft/key-art/Games_Subnav_Minecraft-300x465.jpg");
-    const [bgSrc, setBgSrc] = useState<string>(cached.thumbnail || DEFAULT_BG);
-    const [isVersionDropdownOpen, setIsVersionDropdownOpen] = useState(false);
+
+    useEffect(() => {
+        const cached = getCachedImages(instance.id);
+        if (cached.icon) setIconSrc(cached.icon);
+    }, [instance.id, instance.icon]);
+
+    const allVersions = (instance.versions && instance.versions.length > 0) ? instance.versions : [instance.version];
+    const hasMultipleVersions = allVersions.length > 1;
+    const currentVersion = instance.selectedVersion || instance.version;
 
     const handleVersionChange = async (version: string) => {
-        // Check if it's a complex version
         const parsed = parseVersion(version);
         let newModLoader = instance.modLoader;
         let newModLoaderVersion = instance.modLoaderVersion;
 
         if (parsed.loader) {
-            // It's a complex version, update global state to match
             newModLoader = parsed.loader;
             newModLoaderVersion = parsed.loaderVersion;
         } else {
-            // It's a simple version.
-            // Assume Vanilla if no suffix, unless it's the exact same string as current (which implies no change)
             const currentVersionString = instance.selectedVersion || instance.version;
-
             if (version === currentVersionString) {
                 newModLoader = instance.modLoader;
                 newModLoaderVersion = instance.modLoaderVersion;
@@ -56,129 +130,143 @@ const InstanceCard: React.FC<InstanceCardProps> = React.memo(({ instance, index,
         }
 
         try {
-            const { invoke } = await import("@tauri-apps/api/core");
             await invoke("update_instance", {
                 id: instance.id,
                 selectedVersion: version,
                 modLoader: newModLoader || null,
                 modLoaderVersion: newModLoaderVersion || null
             });
-
             onUpdate(instance.id, {
                 selectedVersion: version,
                 modLoader: newModLoader,
                 modLoaderVersion: newModLoaderVersion
             });
         } catch (e) {
-            console.error("Failed to update instance version change", e);
+            console.error("Failed to update instance version", e);
         }
     };
 
-    // Sync with cached images when instance changes (NOT when imageCacheVersion changes globally)
-    useEffect(() => {
-        const cached = getCachedImages(instance.id);
-        if (cached.icon) setIconSrc(cached.icon);
-        if (cached.thumbnail) setBgSrc(cached.thumbnail);
-    }, [instance.id, instance.icon, instance.backgroundImage]);
+    const modLoaderBadgeClass = instance.modLoader ? {
+        fabric: styles.instanceBadgeFabric,
+        forge: styles.instanceBadgeForge,
+        quilt: styles.instanceBadgeQuilt,
+        neo: styles.instanceBadgeNeo,
+    }[instance.modLoader.toLowerCase()] || styles.instanceBadgeVanilla : styles.instanceBadgeVanilla;
+
+    const [showVersionDropdown, setShowVersionDropdown] = useState(false);
+    const parsedCurrentVersion = parseVersion(currentVersion);
+    const versionDropdownRef = useRef<HTMLDivElement>(null);
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
-            className={styles.card}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.03 }}
+            className={styles.instanceRow}
             onClick={() => onClick(instance)}
+            tabIndex={0}
         >
-            {/* Image Area */}
-            <div className={styles.cardImageArea}>
-                <img src={bgSrc} className={styles.cardBg} alt="" />
-                <div className={styles.cardOverlay} />
+            <div className={styles.instanceIcon}>
+                <img src={iconSrc} alt="" />
             </div>
 
-            {/* Body */}
-            <div className={styles.cardBody}>
-                <div className={styles.cardHeader}>
-                    {/* Icon floating */}
-                    <div className={styles.cardIcon}>
-                        <img src={iconSrc} alt="" />
-                    </div>
-
-                    <div className={styles.cardInfo}>
-                        <h3 className={styles.cardTitle} title={instance.name}>{instance.name}</h3>
-                        <div className={styles.cardMeta}>
+            <div className={styles.instanceInfo}>
+                <h3 className={styles.instanceName} title={instance.name}>{instance.name}</h3>
+                <div className={styles.instanceMeta}>
+                    <span className={styles.instanceVersion}>
+                        {parsedCurrentVersion.mcVersion}
+                    </span>
+                    {instance.modLoader ? (
+                        <span className={cn(styles.instanceBadge, modLoaderBadgeClass)}>
+                            <Cpu size={10} />
+                            <span className="capitalize">{instance.modLoader}</span>
+                        </span>
+                    ) : (
+                        <span className={cn(styles.instanceBadge, styles.instanceBadgeVanilla)}>
+                            Vanilla
+                        </span>
+                    )}
+                    {hasMultipleVersions && (
+                        <div
+                            className={styles.versionSelectorWrapper}
+                            ref={versionDropdownRef}
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             <div
-                                className={cn(styles.loaderBadge, "relative cursor-pointer hover:bg-white/10 transition-colors")}
+                                className={styles.versionSelectorButton}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if ((instance.versions || []).length > 1) {
-                                        setIsVersionDropdownOpen(!isVersionDropdownOpen);
-                                    }
+                                    setShowVersionDropdown(prev => !prev);
                                 }}
                             >
-                                <Box size={12} />
-                                <span>{instance.selectedVersion || instance.version}</span>
-                                {(instance.versions || []).length > 1 && <ChevronDown size={12} className="ml-1 opacity-50" />}
-
-                                <AnimatePresence>
-                                    {isVersionDropdownOpen && (
-                                        <>
-                                            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setIsVersionDropdownOpen(false); }} />
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 5 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: 5 }}
-                                                className={styles.versionDropdown}
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                {(instance.versions || [instance.version]).map((v) => (
-                                                    <div
-                                                        key={v}
-                                                        onClick={() => {
-                                                            handleVersionChange(v);
-                                                            setIsVersionDropdownOpen(false);
-                                                        }}
-                                                        className={cn(
-                                                            styles.versionDropdownItem,
-                                                            (instance.selectedVersion || instance.version) === v ? styles.versionDropdownItemActive : ""
-                                                        )}
-                                                    >
-                                                        <span className="truncate">{v}</span>
-                                                        {(instance.selectedVersion || instance.version) === v && <Check size={14} />}
-                                                    </div>
-                                                ))}
-                                            </motion.div>
-                                        </>
-                                    )}
-                                </AnimatePresence>
+                                <span className={styles.versionSelectorLabel}>
+                                    {hasMultipleVersions ? `${allVersions.length} versiones` : formatVersion(parsedCurrentVersion)}
+                                </span>
+                                <ChevronDown size={12} className={cn(styles.versionSelectorChevron, showVersionDropdown && styles.versionSelectorChevronOpen)} />
                             </div>
-                            {instance.modLoader && (
-                                <div className={styles.loaderBadge}>
-                                    <Cpu size={12} />
-                                    <span className="capitalize">{instance.modLoader}</span>
-                                </div>
-                            )}
+                            <AnimatePresence>
+                                {showVersionDropdown && (
+                                    <VersionDropdown
+                                        versions={allVersions}
+                                        currentVersion={currentVersion}
+                                        onVersionChange={handleVersionChange}
+                                        onClose={() => setShowVersionDropdown(false)}
+                                        wrapperRef={versionDropdownRef}
+                                    />
+                                )}
+                            </AnimatePresence>
                         </div>
-                    </div>
+                    )}
+                    {instance.lastPlayed && (
+                        <span className={styles.lastPlayed}>
+                            <Clock size={10} />
+                            <span>{formatTimeAgo(instance.lastPlayed)}</span>
+                        </span>
+                    )}
                 </div>
+            </div>
 
-                {/* Footer Actions */}
-                <div className={styles.cardFooter}>
-                    <button
-                        className={styles.playButton}
-                        onClick={(e) => onPlay(e, instance)}
-                        disabled={isLaunching}
-                    >
-                        {isLaunching ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
-                        {t('play')}
-                    </button>
-                    <button
-                        className={styles.deleteButton}
-                        onClick={(e) => onDelete(e, instance.id)}
-                        title={t('deleteInstance')}
-                    >
-                        <Trash2 size={16} />
-                    </button>
-                </div>
+            <div className={styles.instanceActions}>
+                <button
+                    className={cn(styles.iconButton, styles.favoriteButton, instance.isFavorite && styles.favoriteButtonActive)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        const newFavorite = !instance.isFavorite;
+                        onUpdate(instance.id, { isFavorite: newFavorite });
+                        invoke("update_instance", { id: instance.id, isFavorite: newFavorite });
+                    }}
+                    title={instance.isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+                >
+                    <Star size={16} fill={instance.isFavorite ? "currentColor" : "none"} />
+                </button>
+                <button
+                    className={styles.playButton}
+                    onClick={(e) => onPlay(e, instance)}
+                    disabled={isLaunching}
+                >
+                    {isLaunching ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} fill="currentColor" />}
+                    {t('play')}
+                </button>
+                <button
+                    className={cn(styles.iconButton, styles.settingsButton)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClick(instance);
+                    }}
+                    title={t('settings')}
+                >
+                    <Settings size={16} />
+                </button>
+                <button
+                    className={cn(styles.iconButton, styles.deleteButton)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(e, instance.id);
+                    }}
+                    title={t('deleteInstance')}
+                >
+                    <Trash2 size={16} />
+                </button>
             </div>
         </motion.div>
     );
@@ -266,8 +354,6 @@ const Instances: React.FC = () => {
 
     const loadData = async () => {
         try {
-            const { invoke } = await import("@tauri-apps/api/core");
-
             if (versions.length === 0) {
                 const versionList = await invoke("get_available_versions");
                 setVersions(versionList as any[]);
@@ -370,7 +456,6 @@ const Instances: React.FC = () => {
         if (!instanceToDelete) return;
         setIsDeleting(true);
         try {
-            const { invoke } = await import("@tauri-apps/api/core");
             await invoke("delete_instance", { id: instanceToDelete });
             removeInstance(instanceToDelete);
             setInstanceToDelete(null);
@@ -407,7 +492,6 @@ const Instances: React.FC = () => {
 
         // Check for Porcos updates
         try {
-            const { invoke } = await import("@tauri-apps/api/core");
             const { join, appCacheDir } = await import("@tauri-apps/api/path");
             const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
             const porcosJsonPath = await join(instancePath, 'porcos.json');
@@ -502,9 +586,8 @@ const Instances: React.FC = () => {
         }
 
         try {
-            const { invoke } = await import("@tauri-apps/api/core");
             const { join, appDataDir } = await import("@tauri-apps/api/path");
-            
+
             const instancePath = await invoke("get_instance_path", { id: instance.id });
             addLog(`Instance path: ${instancePath}`);
 
@@ -625,6 +708,16 @@ const Instances: React.FC = () => {
             const result = await invoke("launch_minecraft", { options });
             addLog("Launch result: " + JSON.stringify(result));
 
+            try {
+                await invoke("update_instance", {
+                    id: instance.id,
+                    lastPlayed: Date.now()
+                });
+                updateInstance(instance.id, { lastPlayed: Date.now() });
+            } catch (e) {
+                console.error("Failed to update lastPlayed", e);
+            }
+
         } catch (error) {
             console.error("Launch failed:", error);
             addLog(`Launch failed: ${error}`);
@@ -689,66 +782,96 @@ const Instances: React.FC = () => {
 
     return (
         <div className={styles.container}>
-            {/* Header */}
-            <div className={styles.header}>
-                <div className={styles.titleSection}>
-                    <h1 className={styles.title}>
-                        {t('myInstances')}
-                        {instances.length > 0 && (
+            {/* Header - hidden when no instances */}
+            {instances.length > 0 && (
+                <div className={styles.header}>
+                    <div className={styles.titleSection}>
+                        <h1 className={styles.title}>
+                            {t('myInstances')}
                             <span className={styles.countBadge}>{instances.length}</span>
-                        )}
-                    </h1>
-                    <p className={styles.subtitle}>{t('myInstancesDesc')}</p>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                    <div className={styles.searchWrapper}>
-                        <input 
-                            type="text" 
-                            placeholder={t('search')} 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className={styles.searchInput}
-                        />
-                        <Search className={styles.searchIcon} size={18} />
+                        </h1>
+                        <p className={styles.subtitle}>{t('myInstancesDesc')}</p>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <div className={styles.searchWrapper}>
+                            <input
+                                type="text"
+                                placeholder={t('search')}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className={styles.searchInput}
+                            />
+                            <Search className={styles.searchIcon} size={18} />
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Content */}
             <div className={styles.content}>
-                <div className={styles.grid}>
-                    {/* Create New Card */}
+                {/* Empty State - No instances at all */}
+                {!searchTerm && instances.length === 0 && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className={styles.createCard}
-                        onClick={() => setShowCreateModal(true)}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={styles.emptyState}
                     >
-                        <div className={styles.createIconWrapper}>
-                            <Plus size={28} strokeWidth={2.5} />
+                        <div className={styles.emptyStateIconWrapper}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-box">
+                                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                                <path d="m3.3 7 8.7 5 8.7-5"></path>
+                                <path d="M12 22V12"></path>
+                            </svg>
                         </div>
-                        <span className={styles.createText}>{t('createNewInstance')}</span>
+                        <h3 className={styles.emptyStateTitle}>No hay instancias</h3>
+                        <p className={styles.emptyStateText}>Crea tu primera instancia para empezar.</p>
+                        <motion.button
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.1 }}
+                            className={styles.emptyStateButton}
+                            onClick={() => setShowCreateModal(true)}
+                        >
+                            <Plus size={32} />
+                        </motion.button>
                     </motion.div>
+                )}
 
-                    {/* Instance Cards */}
-                    {filteredInstances.map((instance, index) => (
-                        <InstanceCard
-                            key={instance.id}
-                            instance={instance}
-                            index={index}
-                            onClick={setViewingInstance}
-                            onPlay={handlePlayInstance}
-                            onDelete={handleDeleteInstance}
-                            onUpdate={updateInstance}
-                            isLaunching={isLaunching}
-                        />
-                    ))}
-                </div>
+                {/* Instances grid */}
+                {(instances.length > 0 || searchTerm) && (
+                    <div className={styles.grid}>
+                        {filteredInstances.map((instance, index) => (
+                            <InstanceCard
+                                key={instance.id}
+                                instance={instance}
+                                index={index}
+                                onClick={setViewingInstance}
+                                onPlay={handlePlayInstance}
+                                onDelete={handleDeleteInstance}
+                                onUpdate={updateInstance}
+                                isLaunching={isLaunching}
+                            />
+                        ))}
 
-                {/* Empty State when searching */}
+                        {/* Create Button */}
+                        {instances.length > 0 && (
+                            <motion.button
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className={styles.createButton}
+                                onClick={() => setShowCreateModal(true)}
+                            >
+                                <Plus size={20} />
+                                {t('createNewInstance')}
+                            </motion.button>
+                        )}
+                    </div>
+                )}
+
+                {/* Empty State - No search results */}
                 {searchTerm && filteredInstances.length === 0 && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={styles.emptyState}
@@ -758,7 +881,7 @@ const Instances: React.FC = () => {
                         </div>
                         <h3 className={styles.emptyStateTitle}>{t('noInstancesFound')}</h3>
                         <p className={styles.emptyStateText}>
-                            {t('noInstancesFoundDesc', { term: searchTerm })}
+                            No se encontraron instancias para "{searchTerm}"
                         </p>
                     </motion.div>
                 )}

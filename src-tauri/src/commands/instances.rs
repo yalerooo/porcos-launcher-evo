@@ -21,6 +21,10 @@ pub struct Instance {
     #[serde(alias = "background_image")]
     pub background_image: Option<String>,
     pub created: u64,
+    #[serde(alias = "last_played")]
+    pub last_played: Option<u64>,
+    #[serde(alias = "is_favorite")]
+    pub is_favorite: Option<bool>,
 }
 
 fn get_instances_dir() -> PathBuf {
@@ -87,6 +91,8 @@ pub async fn create_instance(name: String, version: String, mod_loader: Option<S
         icon: None,
         background_image,
         created,
+        last_played: None,
+        is_favorite: None,
     };
 
     let config_path = instance_dir.join("instance.json");
@@ -205,7 +211,7 @@ pub async fn open_instance_folder(id: String) -> Result<(), String> {
 }
 
 #[command]
-pub async fn update_instance(id: String, name: Option<String>, version: Option<String>, versions: Option<Vec<String>>, mod_loader: Option<String>, mod_loader_version: Option<String>, icon: Option<String>, background_image: Option<String>) -> Result<Instance, String> {
+pub async fn update_instance(id: String, name: Option<String>, version: Option<String>, versions: Option<Vec<String>>, mod_loader: Option<String>, mod_loader_version: Option<String>, icon: Option<String>, background_image: Option<String>, last_played: Option<u64>, is_favorite: Option<bool>) -> Result<Instance, String> {
     log_debug!("Updating instance: {}", id);
     let instances_dir = get_instances_dir();
     let instance_dir = instances_dir.join(&id);
@@ -231,6 +237,8 @@ pub async fn update_instance(id: String, name: Option<String>, version: Option<S
     if let Some(vs) = versions { instance.versions = Some(vs); }
     if let Some(ml) = mod_loader { instance.mod_loader = Some(ml); }
     if let Some(mlv) = mod_loader_version { instance.mod_loader_version = Some(mlv); }
+    if let Some(lp) = last_played { instance.last_played = Some(lp); }
+    if let Some(fav) = is_favorite { instance.is_favorite = Some(fav); }
 
     if let Some(i) = icon {
         let icon_path = PathBuf::from(&i);
