@@ -33,6 +33,10 @@ pub struct LaunchOptions {
     pub memory_min: String,
     #[serde(rename = "memoryMax", alias = "memory_max")]
     pub memory_max: String,
+    #[serde(rename = "resolutionWidth", alias = "resolution_width")]
+    pub resolution_width: Option<String>,
+    #[serde(rename = "resolutionHeight", alias = "resolution_height")]
+    pub resolution_height: Option<String>,
     #[serde(rename = "javaPath", alias = "java_path")]
     pub java_path: Option<PathBuf>,
     #[serde(rename = "minecraftDir", alias = "minecraft_dir")]
@@ -517,8 +521,7 @@ impl MinecraftLauncher {
         substitutions.insert("${user_type}", "msa".to_string());
         substitutions.insert("${user_properties}", "{}".to_string());
         substitutions.insert("${version_type}", version_details.version_type.clone());
-        substitutions.insert("${resolution_width}", "854".to_string());
-        substitutions.insert("${resolution_height}", "480".to_string());
+        // Note: resolution_width and resolution_height are added directly as --width and --height arguments below
 
         let mut command = std::process::Command::new(&java_path);
         
@@ -632,10 +635,18 @@ impl MinecraftLauncher {
                  println!("[MinecraftLauncher] Appending missing --userProperties argument");
                  command.arg("--userProperties");
                  command.arg("{}");
-             }
-        }
-        
-        // Set working directory to game directory
+}
+         }
+
+         // Add resolution arguments for fullscreen/windowed mode
+         let res_width = options.resolution_width.clone().unwrap_or_else(|| "854".to_string());
+         let res_height = options.resolution_height.clone().unwrap_or_else(|| "480".to_string());
+         command.arg("--width");
+         command.arg(&res_width);
+         command.arg("--height");
+         command.arg(&res_height);
+
+         // Set working directory to game directory
         command.current_dir(&self.minecraft_dir);
 
         log_info!("Launching game process...");

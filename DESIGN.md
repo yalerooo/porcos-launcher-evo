@@ -1,25 +1,25 @@
 ---
 version: alpha
-name: Porcos Launcher
-description: "A dark-themed Minecraft launcher with a warm pink accent (#ffbfba), designed for modpack management and gameplay. The surface palette centers on near-black with subtle warm undertones, light text, and rose/pink as the signature chromatic accent. Cards use charcoal panels with hairline borders. The accent rose appears on the brand mark, focus rings, and primary CTAs."
+name: Linear
+description: "A near-black product-focused marketing canvas built around #010102 (the deepest dark surface of any tool in this collection), light gray text (#f7f8f8), and the signature Linear lavender-blue (#5e6ad2) used as the single chromatic accent. The system reads as software-craft documentation: dense, technical, and quietly luxurious. Display type is set in the Linear custom sans (SF Pro Display fallback) at 500–700 with measured negative tracking. Cards live as charcoal panels (#0f1011) with hairline borders. The accent lavender appears on the brand mark, focus rings, and a few intentional CTAs — never decoratively. Page rhythm leans on product UI screenshots framed in dark panels rather than atmospheric color."
 
 colors:
   primary: "#ffbfba"
-  on-primary: "#0f0f0f"
+  on-primary: "#ffffff"
   primary-hover: "#ffd4d1"
   primary-focus: "#ffbfc0"
   ink: "#f7f8f8"
   ink-muted: "#d0d6e0"
   ink-subtle: "#8a8f98"
   ink-tertiary: "#62666d"
-  canvas: "#09090b"
-  surface-1: "#141416"
-  surface-2: "#1a1a1e"
-  surface-3: "#1f1f24"
-  surface-4: "#252529"
-  hairline: "#2a2a30"
-  hairline-strong: "#3a3a42"
-  hairline-tertiary: "#454550"
+  canvas: "#010102"
+  surface-1: "#0f1011"
+  surface-2: "#141516"
+  surface-3: "#18191a"
+  surface-4: "#191a1b"
+  hairline: "#23252a"
+  hairline-strong: "#34343a"
+  hairline-tertiary: "#3e3e44"
   inverse-canvas: "#ffffff"
   inverse-surface-1: "#f5f6f6"
   inverse-surface-2: "#f6f7f7"
@@ -257,47 +257,54 @@ components:
 
 ## Overview
 
-Porcos Launcher's design system centers on a dark canvas with warm undertones, using rose/pink (#ffbfba) as the single chromatic accent. The surface ladder progresses from deep charcoal (#09090b canvas) through increasingly lighter surfaces. Light text carries body and headlines, while the rose accent marks the brand, focus states, and primary CTAs.
+Linear's marketing canvas is the deepest dark surface in this collection — `{colors.canvas}` is #010102, essentially pure black with a faint blue tint. On top sits a four-step surface ladder (`{colors.surface-1}` through `{colors.surface-4}`) for cards, panels, and lifted tiles, with hairline borders running from `{colors.hairline}` (#23252a) up through `{colors.hairline-strong}` and `{colors.hairline-tertiary}`. Light gray text (`{colors.ink}` #f7f8f8) carries the body and headlines.
 
-The system is built for modpack management — cards and panels organize instance data, with hairline borders providing subtle separation. The rose accent is used sparingly: brand mark, focus rings, and primary CTAs.
+The single chromatic accent is **Linear lavender-blue** `{colors.primary}` (#5e6ad2) — used on the brand mark, focus rings, and the primary CTA button. A lighter hover state (`{colors.primary-hover}` #828fff) and a focus-tinted variant (`{colors.primary-focus}` #5e69d1) extend the same hue. Linear avoids saturated greens, oranges, reds, etc. on the marketing canvas — the only semantic color is `{colors.semantic-success}` (#27a644) for status pills and the rare success indicator.
+
+Display type runs Linear's custom sans (with `SF Pro Display` fallback) at weight 500–700 with negative letter-spacing scaling from -3.0px at 80px down to 0 at body. The body family is Linear's text cut, and a Linear Mono is reserved for code snippets in product screenshots.
+
+The page rhythm is **dense product screenshots** — Linear's marketing leads with high-fidelity captures of the product UI (issue list, project view, dashboard) framed in `{colors.surface-1}` panels with `{rounded.xl}` 16px corners. The chrome is intentionally minimal so the app screenshots can do the heavy lifting.
 
 **Key Characteristics:**
-- **Dark canvas with warm undertones** — `{colors.canvas}` (#09090b) is near-pure black with a faint warm tint.
-- **Rose-pink brand accent** (`{colors.primary}` #ffbfba) — used on brand mark, focus, and the primary CTA.
+- **Dark-canvas marketing system** — `{colors.canvas}` (#010102) is the deepest dark in this collection.
+- **Lavender-blue brand accent** (`{colors.primary}` #5e6ad2) — used scarcely on brand mark, focus, and the primary CTA.
 - Four-step surface ladder (canvas → surface-1 → surface-2 → surface-3 → surface-4) carries hierarchy without shadow.
-- Cards use `{rounded.lg}` 12px corners with 1px hairline borders.
-- **Instance management UI** dominates — cards and lists for modpack instances.
-- No second chromatic color. No atmospheric gradients.
+- Display tracking pulls aggressively negative (-3.0px at 80px); body holds at -0.05px.
+- Cards use `{rounded.lg}` 12px corners with 1px hairline borders — never pill, rarely 16px.
+- **Product UI screenshots** dominate the page. The marketing chrome is a dark frame for the app.
+- No second chromatic color. No atmospheric gradients. No spotlight cards.
 
 ## Colors
 
+> Source pages: linear.app (home), /intake, /pricing, /contact/sales, /build.
+
 ### Brand & Accent
-- **Rose** ({colors.primary}): The signature Porcos accent — primary CTA, brand mark, link emphasis.
-- **Rose Hover** ({colors.primary-hover}): Lighter rose (#ffd4d1) — hovered state of the primary CTA.
-- **Rose Focus** ({colors.primary-focus}): Focus-ring tint (#ffbfba) — focused inputs, focused buttons.
-- **Brand Secure** ({colors.brand-secure}): Muted rose-gray (#c9a0a5) — secure surfaces.
+- **Lavender-Blue** ({colors.primary}): The signature Linear accent — primary CTA, brand mark, link emphasis.
+- **Lavender Hover** ({colors.primary-hover}): Lighter lavender (#828fff) — hovered state of the primary CTA.
+- **Lavender Focus** ({colors.primary-focus}): Focus-ring tint (#5e69d1) — focused inputs, focused buttons.
+- **Brand Secure** ({colors.brand-secure}): Muted lavender-gray (#7a7fad) — used in "Linear Security" surfaces.
 
 ### Surface
-- **Canvas** ({colors.canvas}): Default page background — #09090b, near-pure black with a faint warm tint.
-- **Surface 1** ({colors.surface-1}): One step above canvas — #141416.
-- **Surface 2** ({colors.surface-2}): Two steps above — #1a1a1e.
-- **Surface 3** ({colors.surface-3}): Three steps above — #1f1f24.
-- **Surface 4** ({colors.surface-4}): Four steps above — #252529.
-- **Hairline** ({colors.hairline}): 1px borders on cards and dividers — #2a2a30.
-- **Hairline Strong** ({colors.hairline-strong}): Stronger borders — #3a3a42.
-- **Hairline Tertiary** ({colors.hairline-tertiary}): Tertiary borders — #454550.
-- **Inverse Canvas** ({colors.inverse-canvas}): Pure white.
+- **Canvas** ({colors.canvas}): Default page background — #010102, near-pure black with a faint blue tint.
+- **Surface 1** ({colors.surface-1}): One step above canvas — feature cards, pricing cards, product screenshot panels.
+- **Surface 2** ({colors.surface-2}): Two steps above — featured pricing card, hovered cards.
+- **Surface 3** ({colors.surface-3}): Three steps above — line-tertiary backgrounds, sub-nav.
+- **Surface 4** ({colors.surface-4}): Four steps above — bg-level-3, deepest lifted surface.
+- **Hairline** ({colors.hairline}): 1px borders on cards and dividers.
+- **Hairline Strong** ({colors.hairline-strong}): Stronger 1px borders — input focus rings.
+- **Hairline Tertiary** ({colors.hairline-tertiary}): Tertiary borders for nested surfaces.
+- **Inverse Canvas** ({colors.inverse-canvas}): Pure white — surface of the inverse pill CTA on a small set of section openers.
 - **Inverse Surface 1** ({colors.inverse-surface-1}): One step above inverse canvas.
 - **Inverse Surface 2** ({colors.inverse-surface-2}): Two steps above inverse canvas.
 
 ### Text
 - **Ink** ({colors.ink}): All headlines and emphasized body type — light gray #f7f8f8.
-- **Ink Muted** ({colors.ink-muted}): Secondary type at #d0d6e0.
-- **Ink Subtle** ({colors.ink-subtle}): Tertiary type at #8a8f98.
+- **Ink Muted** ({colors.ink-muted}): Secondary type at #d0d6e0 — meta info on hero panels.
+- **Ink Subtle** ({colors.ink-subtle}): Tertiary type at #8a8f98 — deselected pricing tabs, footer columns.
 - **Ink Tertiary** ({colors.ink-tertiary}): Quaternary at #62666d — disabled, footnotes.
 
 ### Semantic
-- **Success Green** ({colors.semantic-success}): Status indicators.
+- **Success Green** ({colors.semantic-success}): Status pills, success indicators. The only semantic color on marketing.
 - **Overlay** ({colors.semantic-overlay}): Pure black overlay scrim for modals.
 
 ## Typography
@@ -403,33 +410,72 @@ Linear's depth is carried by surface ladder + hairline borders. The brand resist
 
 ### Buttons
 
-**`button-primary`** — Rose CTA. The default primary CTA across all pages.
-- Background `{colors.primary}`, text `{colors.on-primary}`, padding 8px 14px, rounded `{rounded.md}`.
+**`button-primary`** — Lavender CTA. The default primary CTA across all pages.
+- Background `{colors.primary}`, text `{colors.on-primary}`, type `{typography.button}`, padding 8px 14px, rounded `{rounded.md}`.
 - Pressed state lives in `button-primary-pressed` (background shifts to `{colors.primary-focus}`).
-- Hover state lives in `button-primary-hover` (background shifts to `{colors.primary-hover}` lighter rose).
+- Hover state lives in `button-primary-hover` (background shifts to `{colors.primary-hover}` lighter lavender).
 
-**`button-secondary`** — Charcoal button. Used for secondary CTAs.
-- Background `{colors.surface-1}`, text `{colors.ink}`, padding 8px 14px, rounded `{rounded.md}`. 1px `{colors.hairline}` border.
+**`button-secondary`** — Charcoal button. Used for secondary CTAs ("Sign in", "Read changelog").
+- Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.button}`, padding 8px 14px, rounded `{rounded.md}`. 1px `{colors.hairline}` border.
 
 **`button-tertiary`** — Plain text button.
-- Background `{colors.canvas}`, text `{colors.ink}`, rounded `{rounded.md}`, padding 8px 14px.
+- Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.button}`, rounded `{rounded.md}`, padding 8px 14px.
 
 **`button-inverse`** — White-on-dark inverse CTA.
-- Background `{colors.inverse-canvas}`, text `{colors.inverse-ink}`, rounded `{rounded.md}`, padding 8px 14px.
+- Background `{colors.inverse-canvas}`, text `{colors.inverse-ink}`, type `{typography.button}`, rounded `{rounded.md}`, padding 8px 14px.
 
-### Instance Cards
+### Pricing Tabs
 
-**`instance-card`** — Instance row in the Instances list.
-- Background `{colors.surface-1}`, text `{colors.ink}`, rounded `{rounded.lg}`, padding 12px 16px. 1px `{colors.hairline}` border.
+**`pricing-tab-default`** + **`pricing-tab-selected`** — Pill-toggle on `/pricing`.
+- Default: `{colors.canvas}` background, `{colors.ink-subtle}` text, rounded `{rounded.pill}`, padding 6px 14px.
+- Selected: `{colors.surface-2}` background, `{colors.ink}` text — selected = surface lift.
 
-**`instance-badge`** — Badge showing mod loader type (Vanilla, Fabric, Forge, Quilt, NeoForge).
-- Simple text with loader-specific color: Vanilla (#a1a1aa), Fabric (#c084fc), Forge (#fb923c), Quilt (#22d3ee), NeoForge (#f472b6).
+### Cards & Containers
 
-**`version-selector`** — Dropdown for selecting instance version.
-- Button with chevron indicator, dropdown panel with version list.
+**`pricing-card`** — Each tier on `/pricing`.
+- Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.body}`, rounded `{rounded.lg}`, padding 24px. 1px `{colors.hairline}` border.
 
-**`empty-state`** — Empty state when no instances exist.
-- Centered content with icon, title, description, and create CTA.
+**`pricing-card-featured`** — Recommended tier — surface lift to surface-2.
+- Background `{colors.surface-2}`, otherwise identical structure.
+
+**`feature-card`** — Generic feature highlight tile.
+- Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.body}`, rounded `{rounded.lg}`, padding 24px.
+
+**`product-screenshot-card`** — The dominant card type — frames a high-fidelity Linear app UI screenshot.
+- Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.body}`, rounded `{rounded.xl}`, padding 24px.
+
+**`testimonial-card`** — Customer quote with avatar + name + role.
+- Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.body-lg}`, rounded `{rounded.lg}`, padding 32px.
+
+**`customer-logo-tile`** — Small tile in the customer marquee.
+- Background `{colors.canvas}`, text `{colors.ink-subtle}`, type `{typography.caption}`, rounded `{rounded.xs}`, padding 16px.
+
+**`cta-banner`** — Closing CTA panel near page bottom.
+- Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.headline}`, rounded `{rounded.lg}`, padding 48px.
+
+### Inputs & Forms
+
+**`text-input`** + **`text-input-focused`** — Form fields on `/contact/sales` and signup overlays.
+- Background `{colors.surface-1}`, text `{colors.ink}`, type `{typography.body}`, rounded `{rounded.md}`, padding 8px 12px.
+- Focused state retains the same surface; the focus ring is a 2px `{colors.primary-focus}` outline at 50% opacity.
+
+### Status & Build Page
+
+**`changelog-row`** — Each row in `/build` (changelog page) listing version, date, and changes.
+- Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.body}`, rounded `{rounded.xs}`, padding 24px 0. 1px `{colors.hairline}` bottom rule.
+
+**`status-badge`** — Small status pill.
+- Background `{colors.surface-2}`, text `{colors.ink-muted}`, type `{typography.caption}`, rounded `{rounded.pill}`, padding 2px 8px.
+
+### Navigation
+
+**`top-nav`** — Sticky dark bar with the Linear wordmark left, primary nav links centered, and a `button-secondary` ("Sign in") + `button-primary` ("Get started") pair right.
+- Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.body-sm}`, height 56px.
+
+### Footer
+
+**`footer`** — Dense link grid on `{colors.canvas}` with the Linear wordmark left.
+- Background `{colors.canvas}`, text `{colors.ink-subtle}`, type `{typography.caption}`, padding 64px 32px.
 
 ## Do's and Don'ts
 

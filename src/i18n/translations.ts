@@ -228,6 +228,12 @@ export const translations = {
     about: 'About',
     version: 'Version',
     checkUpdates: 'Check for Updates',
+    display: 'Display',
+    displaySettings: 'Display Settings',
+    displayDesc: 'Screen resolution for Minecraft',
+    customResolution: 'Custom Resolution',
+    currentResolution: 'Current Resolution',
+    apply: 'Apply',
     
     // Console Page
     consoleTitle: 'Launcher Output',
@@ -516,6 +522,12 @@ export const translations = {
     about: 'Acerca de',
     version: 'Versión',
     checkUpdates: 'Buscar Actualizaciones',
+    display: 'Pantalla',
+    displaySettings: 'Ajustes de Pantalla',
+    displayDesc: 'Resolución de pantalla para Minecraft',
+    customResolution: 'Resolución Personalizada',
+    currentResolution: 'Resolución Actual',
+    apply: 'Aplicar',
     
     // Console Page
     consoleTitle: 'Salida del Launcher',

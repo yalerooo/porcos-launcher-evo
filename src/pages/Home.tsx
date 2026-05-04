@@ -24,7 +24,7 @@ const InstanceIcon = React.memo(({ instance, isActive }: { instance: Instance, i
 
     return (
         <div className={cn(
-            "w-12 h-12 rounded-2xl overflow-hidden transition-all duration-300 relative shadow-lg",
+            "w-12 h-12 rounded-xl overflow-hidden transition-all duration-300 relative shadow-lg",
             isActive
                 ? "ring-0 opacity-100 scale-105"
                 : "opacity-40 hover:opacity-100 grayscale hover:grayscale-0 hover:scale-110"
@@ -51,6 +51,8 @@ const Home: React.FC = () => {
     const isLaunching = useLauncherStore(state => state.isLaunching);
     const memoryMin = useLauncherStore(state => state.memoryMin);
     const memoryMax = useLauncherStore(state => state.memoryMax);
+    const resolutionWidth = useLauncherStore(state => state.resolutionWidth);
+    const resolutionHeight = useLauncherStore(state => state.resolutionHeight);
     const launchStage = useLauncherStore(state => state.launchStage);
     const launchProgress = useLauncherStore(state => state.launchProgress);
     const versions = useLauncherStore(state => state.versions);
@@ -863,6 +865,8 @@ const Home: React.FC = () => {
                 },
                 memory_min: `${memoryMin}G`,
                 memory_max: `${memoryMax}G`,
+                resolution_width: resolutionWidth,
+                resolution_height: resolutionHeight,
                 java_path: javaPath,
                 minecraft_dir: instancePath
             };

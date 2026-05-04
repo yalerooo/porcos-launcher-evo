@@ -111,10 +111,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     };
 
     return (
-        <div className="relative w-full h-full flex flex-col bg-[#0f0f0f] overflow-hidden rounded-xl border border-white/5">
-            
+        <div className="relative w-full h-full flex flex-col bg-[var(--bg-primary)] overflow-hidden rounded-xl border border-[var(--border)]">
+
             {/* TitleBar */}
-            <div className="relative z-50 bg-black/20 backdrop-blur-sm border-b border-white/5">
+            <div className="relative z-50 bg-[var(--bg-secondary)]/80 backdrop-blur-sm border-b border-[var(--border)]">
                 <TitleBar />
             </div>
 
@@ -197,7 +197,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                     <button
                                         onClick={handleMicrosoftLogin}
                                         disabled={isLoading}
-                                        className="w-full h-14 bg-[#2f2f2f] hover:bg-[#3f3f3f] border border-white/5 text-white rounded-xl font-medium text-base transition-colors flex items-center justify-center gap-3"
+                                        className="w-full h-14 bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl font-medium text-base transition-colors flex items-center justify-center gap-3"
                                     >
                                         {isLoading ? (
                                             <Loader2 className="animate-spin w-5 h-5" />
@@ -216,7 +216,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
                                     <button
                                         onClick={() => setView('offline')}
-                                        className="w-full h-14 bg-transparent hover:bg-white/5 border border-white/10 text-white rounded-xl font-medium text-base transition-colors flex items-center justify-center gap-3"
+                                        className="w-full h-14 bg-transparent hover:bg-[var(--bg-secondary)] border border-[var(--border-strong)] text-[var(--text-primary)] rounded-xl font-medium text-base transition-colors flex items-center justify-center gap-3"
                                     >
                                         <User size={20} />
                                         {t('offlineMode')}
@@ -232,14 +232,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                     className="flex flex-col gap-12"
                                 >
                                     <div className="space-y-3">
-                                        <label className="block text-sm font-medium text-[#a1a1aa] ml-1">{t('offlineUsername')}</label>
+                                        <label className="block text-sm font-medium text-[var(--text-secondary)] ml-1">{t('offlineUsername')}</label>
                                         <input
                                             type="text"
                                             placeholder={t('usernamePlaceholder')}
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleOfflineLogin()}
-                                            className="w-full h-14 bg-black/40 border border-white/10 rounded-xl px-5 text-white placeholder:text-white/20 focus:outline-none focus:border-[#ffb8b8] focus:ring-1 focus:ring-[#ffb8b8] transition-all text-lg"
+                                            className="w-full h-14 bg-[var(--bg-primary)] border border-[var(--border)] rounded-xl px-5 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] transition-all text-lg"
                                             autoFocus
                                         />
                                     </div>
@@ -247,14 +247,14 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                                     <div className="flex items-center gap-6">
                                         <button
                                             onClick={() => setView('main')}
-                                            className="h-14 w-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl transition-colors"
+                                            className="h-14 w-14 flex items-center justify-center bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border)] text-[var(--text-primary)] rounded-xl transition-colors"
                                         >
                                             <ArrowLeft size={24} />
                                         </button>
                                         <button
                                             onClick={handleOfflineLogin}
                                             disabled={!username.trim() || isLoading}
-                                            className="flex-1 h-14 bg-[#ffb8b8] hover:bg-[#ffb8b8]/90 text-black rounded-xl font-bold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,184,184,0.2)]"
+                                            className="flex-1 h-14 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--accent-foreground)] rounded-xl font-bold text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,191,186,0.2)]"
                                         >
                                             {isLoading ? <Loader2 className="animate-spin w-6 h-6" /> : (
                                                 <>

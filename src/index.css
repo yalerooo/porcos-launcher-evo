@@ -2,37 +2,73 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
+  /* Brand & Accent Colors */
   --color-primary: #ffbfba;
-  --color-primary-foreground: #1a1a1a;
-  --color-bg-primary: #0f0f0f;
-  --color-bg-secondary: #18181b;
-  --color-bg-tertiary: #27272a;
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #a1a1aa;
-  --color-border: #27272a;
-  --color-danger: #ef4444;
-  --color-success: #22c55e;
+  --color-primary-foreground: #0f0f0f;
+  --color-primary-hover: #ffd4d1;
+  --color-primary-focus: #ffbfc0;
 
-  --radius-lg: 1rem;
-  --radius-md: 0.75rem;
-  --radius-sm: 0.5rem;
+  /* Background Colors (Surface Ladder) */
+  --color-bg-primary: #09090b;
+  --color-bg-secondary: #141416;
+  --color-bg-tertiary: #1a1a1e;
+  --color-bg-elevated: #1f1f24;
+
+  /* Text Colors */
+  --color-text-primary: #f7f8f8;
+  --color-text-secondary: #d0d6e0;
+  --color-text-muted: #8a8f98;
+  --color-text-subtle: #62666d;
+
+  /* Border Colors */
+  --color-border: #2a2a30;
+  --color-border-strong: #3a3a42;
+  --color-border-subtle: #454550;
+
+  /* Semantic Colors */
+  --color-danger: #ef4444;
+  --color-success: #27a644;
+
+  /* Border Radius Scale */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
 }
 
 :root {
-  --bg-primary: #0f0f0f;
-  --bg-secondary: #18181b;
-  --bg-tertiary: #27272a;
-  --text-primary: #ffffff;
-  --text-secondary: #a1a1aa;
+  /* Accent & Brand */
   --accent: #ffbfba;
-  --accent-foreground: #1a1a1a;
-  --border: #27272a;
+  --accent-foreground: #0f0f0f;
+  --accent-hover: #ffd4d1;
+  --accent-focus: #ffbfc0;
+
+  /* Background Colors */
+  --bg-primary: #09090b;
+  --bg-secondary: #141416;
+  --bg-tertiary: #1a1a1e;
+  --bg-elevated: #1f1f24;
+
+  /* Text Colors */
+  --text-primary: #f7f8f8;
+  --text-secondary: #d0d6e0;
+  --text-muted: #8a8f98;
+  --text-subtle: #62666d;
+
+  /* Border Colors */
+  --border: #2a2a30;
+  --border-strong: #3a3a42;
+  --border-subtle: #454550;
+
+  /* Semantic Colors */
   --danger: #ef4444;
-  --success: #22c55e;
+  --success: #27a644;
 
   /* Instance Card Variables */
-  --card-bg: rgba(24, 24, 27, 0.6);
-  --card-border: rgba(255, 255, 255, 0.08);
+  --card-bg: #141416;
+  --card-border: #2a2a30;
   --card-border-hover: rgba(255, 191, 186, 0.4);
   --card-glow: rgba(255, 191, 186, 0.15);
   --card-footer-bg: rgba(255, 255, 255, 0.03);
@@ -100,10 +136,10 @@ body {
 
 /* Glassmorphism & Apple-like touches */
 .glass-panel {
-  background: rgba(24, 24, 27, 0.8);
+  background: rgba(20, 20, 22, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid #2a2a30;
 }
 
 /* Main Layout Structure */
@@ -156,12 +192,12 @@ body:has([data-modal-overlay="true"]) aside[class*="group/sidebar"]:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-tertiary);
+  background: var(--border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--border-strong);
 }
 
 /* TitleBar */
@@ -243,11 +279,40 @@ body:has([data-modal-overlay="true"]) aside[class*="group/sidebar"]:hover {
 .btn-primary {
   background: var(--accent);
   color: var(--accent-foreground);
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
   font-weight: 600;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 14px;
+  transition: all var(--transition-base);
   border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 10px rgba(255, 191, 186, 0.25);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(255, 191, 186, 0.4);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  filter: brightness(1.02);
+}
+
+.btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all var(--transition-base);
+  border: 1px solid var(--border);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -255,55 +320,63 @@ body:has([data-modal-overlay="true"]) aside[class*="group/sidebar"]:hover {
   gap: 8px;
 }
 
-.btn-primary:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 191, 186, 0.2);
-}
-
-.btn-primary:active {
-  transform: translateY(0);
+.btn-secondary:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
 }
 
 .card {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 1.5rem;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .card:hover {
-  border-color: rgba(255, 191, 186, 0.2);
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(255, 191, 186, 0.08);
 }
+
+/* HOVER-ACTIVE: Glow effect enabled */
+/* HOVER-MINIMAL: Comment out box-shadow above if not wanted */
 
 /* Inputs */
 .input-field {
-  background: var(--bg-tertiary);
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
   color: var(--text-primary);
   width: 100%;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
   outline: none;
+  font-size: 14px;
+}
+
+.input-field::placeholder {
+  color: var(--text-subtle);
+}
+
+.input-field:hover {
+  border-color: var(--border-strong);
 }
 
 .input-field:focus {
-  background: var(--bg-secondary);
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(255, 191, 186, 0.1);
+  box-shadow: 0 0 0 3px rgba(255, 191, 186, 0.1);
 }
 
 /* Microsoft Auth Popup */
 .ms-modal {
   width: 430px;
   padding: 28px;
-  background: #111318;
+  background: var(--bg-secondary);
   color: white;
-  border-radius: 22px;
+  border-radius: 16px;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
-  font-family: "Segoe UI", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  border: 1px solid var(--border);
 }
 
 .ms-header {
@@ -355,21 +428,21 @@ body:has([data-modal-overlay="true"]) aside[class*="group/sidebar"]:hover {
 
 .ms-desc {
   font-size: 14px;
-  color: #d0d4df;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   line-height: 1.4;
 }
 
 .ms-desc-light {
   font-size: 13px;
-  color: #9aa0ad;
+  color: var(--text-muted);
   margin-bottom: 14px;
   line-height: 1.4;
 }
 
 .code-box {
-  background: #f3f4f7;
-  color: #000;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
   font-size: 26px;
   font-weight: 600;
   padding: 10px 14px;
@@ -383,30 +456,31 @@ body:has([data-modal-overlay="true"]) aside[class*="group/sidebar"]:hover {
 }
 
 .code-box .code {
-  font-family: 'Segoe UI Mono', 'Courier New', monospace;
+  font-family: 'Inter', ui-monospace, 'Courier New', monospace;
   user-select: all;
 }
 
 .copy-btn {
-  background: white;
-  border: none;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
   font-size: 20px;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 8px;
-  transition: background-color 0.2s;
+  transition: all var(--transition-fast);
   display: flex;
   align-items: center;
   justify-content: center;
   width: 40px;
   height: 40px;
-  color: #000;
+  color: var(--text-primary);
   position: absolute;
   right: 14px;
 }
 
 .copy-btn:hover {
-  background: #f0f0f0;
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
 }
 
 .ms-modal .buttons {
@@ -416,36 +490,38 @@ body:has([data-modal-overlay="true"]) aside[class*="group/sidebar"]:hover {
 
 .ms-modal .primary {
   flex: 1;
-  background: #ffbfba;
+  background: var(--accent);
   border: none;
   padding: 12px;
-  border-radius: 10px;
-  color: #1a1a1a;
+  border-radius: 8px;
+  color: var(--accent-foreground);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
 }
 
 .ms-modal .primary:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
+  box-shadow: 0 4px 20px rgba(255, 191, 186, 0.3);
 }
 
 .ms-modal .secondary {
   flex: 1;
   background: transparent;
-  border: 1px solid #3c3f45;
+  border: 1px solid var(--border);
   padding: 12px;
-  border-radius: 10px;
-  color: #d1d4db;
+  border-radius: 8px;
+  color: var(--text-primary);
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all var(--transition-base);
 }
 
 .ms-modal .secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
 }
 
 /* Custom Scrollbar for specific containers */
@@ -458,11 +534,11 @@ body:has([data-modal-overlay="true"]) aside[class*="group/sidebar"]:hover {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--border);
   border-radius: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--border-strong);
 }
 

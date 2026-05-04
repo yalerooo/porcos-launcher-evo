@@ -533,8 +533,8 @@ const Mods: React.FC = () => {
             </div>
 
             <div className={cn(styles.contentArea, (activeSource === 'porcos' || searchType === 'updates') && styles.contentAreaFull)}>
-                {/* Sidebar */}
-                {(searchType === 'mods' || searchType === 'modpacks') && activeSource !== 'porcos' && (
+                {/* Sidebar - Show when loading or when items are loaded */}
+                {(searchType === 'mods' || searchType === 'modpacks') && activeSource !== 'porcos' && (isLoading || items.length > 0) && (
                     <div className={styles.sidebar}>
                         <h3 className={styles.categoryTitle}>{t('categories')}</h3>
                         <div className={styles.categoryList}>
@@ -557,29 +557,29 @@ const Mods: React.FC = () => {
                     </div>
                 )}
 
-                {/* Search Bar */}
-                {searchType !== 'updates' && (
-                    <div className={cn(styles.searchSection, activeSource === 'porcos' && styles.fullWidth)}>
-                        <form onSubmit={handleSearch}>
-                            <div className={styles.searchContainer}>
-                                <Search className={styles.searchIcon} size={20} />
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder={t('searchPlaceholder', { type: searchType, source: activeSource === 'modrinth' ? 'Modrinth' : 'CurseForge' })}
-                                    className={styles.searchInput}
-                                />
-                                <button type="submit" className={styles.searchButton}>
-                                    {t('searchButton')}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                )}
+                <div className={styles.mainContent}>
+                    {/* Search Bar */}
+                    {searchType !== 'updates' && (
+                        <div className={cn(styles.searchSection, activeSource === 'porcos' && styles.fullWidth)}>
+                            <form onSubmit={handleSearch}>
+                                <div className={styles.searchContainer}>
+                                    <Search className={styles.searchIcon} size={20} />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder={t('searchPlaceholder', { type: searchType, source: activeSource === 'modrinth' ? 'Modrinth' : 'CurseForge' })}
+                                        className={styles.searchInput}
+                                    />
+                                    <button type="submit" className={styles.searchButton}>
+                                        {t('searchButton')}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
 
-                {/* List & Pagination */}
-                
+                    {/* List & Pagination */}
                     <div className={cn(styles.resultsList, (activeSource === 'porcos' || searchType === 'updates') && styles.fullWidth)}>
                         {isLoading ? (
                             <div className={styles.loadingContainer}>
@@ -718,7 +718,7 @@ const Mods: React.FC = () => {
                     </div>
 
                     {/* Pagination Bar */}
-                    {!isLoading && items.length > 0 && searchType !== 'updates' && (
+                    {searchType !== 'updates' && (
                         <div className={cn(styles.paginationBar, activeSource === 'porcos' && styles.fullWidth)}>
                             <button
                                 onClick={() => setPage(p => Math.max(0, p - 1))}
@@ -739,6 +739,7 @@ const Mods: React.FC = () => {
                             </button>
                         </div>
                     )}
+                </div>
             </div>
 
             <ModpackInstallModal 

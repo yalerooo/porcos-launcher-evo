@@ -283,6 +283,8 @@ const Instances: React.FC = () => {
     const launchProgress = useLauncherStore(state => state.launchProgress);
     const memoryMin = useLauncherStore(state => state.memoryMin);
     const memoryMax = useLauncherStore(state => state.memoryMax);
+    const resolutionWidth = useLauncherStore(state => state.resolutionWidth);
+    const resolutionHeight = useLauncherStore(state => state.resolutionHeight);
 
     // Setters (don't cause re-renders)
     const { removeInstance, setInstances, updateInstance, setVersions, setIsLaunching, addLog, setSelectedInstance, setLaunchStartTime, setLaunchStage, setLaunchProgress } = useLauncherStore();
@@ -699,6 +701,8 @@ const Instances: React.FC = () => {
                 },
                 memory_min: `${memoryMin}G`,
                 memory_max: `${memoryMax}G`,
+                resolution_width: resolutionWidth,
+                resolution_height: resolutionHeight,
                 java_path: javaPath,
                 minecraft_dir: instancePath
             };

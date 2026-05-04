@@ -158,6 +158,8 @@ interface LauncherState {
     selectedVersion: string; // Fallback for quick play
     memoryMin: string;
     memoryMax: string;
+    resolutionWidth: string;
+    resolutionHeight: string;
     isLaunching: boolean;
     launchStage: string;
     launchProgress: number;
@@ -176,6 +178,7 @@ interface LauncherState {
     setSelectedVersion: (version: string) => void;
     setMemoryMin: (val: string) => void;
     setMemoryMax: (val: string) => void;
+    setResolution: (width: string, height: string) => void;
     setIsLaunching: (isLaunching: boolean) => void;
     setLaunchStage: (stage: string) => void;
     setLaunchProgress: (progress: number) => void;
@@ -195,6 +198,8 @@ export const useLauncherStore = create<LauncherState>()(
             selectedVersion: '',
             memoryMin: '2',
             memoryMax: '4',
+            resolutionWidth: '1920',
+            resolutionHeight: '1080',
             isLaunching: false,
             launchStage: '',
             launchProgress: 0,
@@ -248,6 +253,7 @@ export const useLauncherStore = create<LauncherState>()(
             setSelectedVersion: (selectedVersion) => set({ selectedVersion }),
             setMemoryMin: (memoryMin) => set({ memoryMin }),
             setMemoryMax: (memoryMax) => set({ memoryMax }),
+            setResolution: (width, height) => set({ resolutionWidth: width, resolutionHeight: height }),
             setIsLaunching: (isLaunching) => set({ isLaunching }),
             setLaunchStage: (launchStage) => set({ launchStage }),
             setLaunchProgress: (launchProgress) => set({ launchProgress }),
@@ -282,6 +288,8 @@ export const useLauncherStore = create<LauncherState>()(
                 selectedVersion: state.selectedVersion,
                 memoryMin: state.memoryMin,
                 memoryMax: state.memoryMax,
+                resolutionWidth: state.resolutionWidth,
+                resolutionHeight: state.resolutionHeight,
                 crashReport: state.crashReport,
                 launchStartTime: state.launchStartTime
             }),
