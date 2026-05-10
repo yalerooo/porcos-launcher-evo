@@ -505,7 +505,7 @@ impl MinecraftLauncher {
         let mut substitutions = std::collections::HashMap::new();
         substitutions.insert("${natives_directory}", natives_dir.to_string_lossy().to_string());
         substitutions.insert("${launcher_name}", "PorcosLauncher".to_string());
-        substitutions.insert("${launcher_version}", "0.1.7".to_string());
+        substitutions.insert("${launcher_version}", "0.1.8".to_string());
         substitutions.insert("${classpath}", classpath.clone());
         substitutions.insert("${library_directory}", libraries_dir.to_string_lossy().to_string());
         substitutions.insert("${classpath_separator}", if cfg!(windows) { ";" } else { ":" }.to_string());

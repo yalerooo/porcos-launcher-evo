@@ -559,3 +559,10 @@ pub async fn merge_dir(source: String, target: String, skip_files: Option<Vec<St
             reason: e.to_string(),
         }.to_string())
 }
+
+#[tauri::command]
+pub async fn create_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path)
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+    Ok(())
+}

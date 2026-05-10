@@ -1,7 +1,7 @@
 {
   "name": "porcoslauncherevo",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "author": "Porcos Team",
   "type": "module",
   "scripts": {
@@ -33,7 +33,9 @@
     "react-window": "^1.8.10",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
+    "skinview3d": "^3.4.2",
     "tailwind-merge": "^3.4.0",
+    "three": "^0.184.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -43,6 +45,7 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/three": "^0.184.0",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.4.22",
     "postcss": "^8.5.6",

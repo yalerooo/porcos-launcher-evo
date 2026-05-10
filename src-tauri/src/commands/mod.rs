@@ -4,5 +4,6 @@ pub mod instances;
 pub mod modloaders;
 pub mod network;
 pub mod files;
+pub mod skin;
 
 

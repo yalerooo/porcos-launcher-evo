@@ -292,26 +292,19 @@
     gap: 0.3rem;
     font-size: 0.7rem;
     font-weight: 500;
+    color: #ffbfba;
 }
 
-.instanceBadgeVanilla {
-    color: #a1a1aa;
+.modLoaderIcon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
 }
 
-.instanceBadgeFabric {
-    color: #c084fc;
-}
-
-.instanceBadgeForge {
-    color: #fb923c;
-}
-
-.instanceBadgeQuilt {
-    color: #22d3ee;
-}
-
-.instanceBadgeNeo {
-    color: #f472b6;
+.modLoaderIconSmall {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
 }
 
 /* Version Selector - Dropdown style */
@@ -414,23 +407,10 @@
 .versionDropdownLoader {
     font-size: 0.65rem;
     font-weight: 500;
-    color: #71717a;
-}
-
-.versionDropdownLoaderFabric {
-    color: #c084fc;
-}
-
-.versionDropdownLoaderForge {
-    color: #fb923c;
-}
-
-.versionDropdownLoaderQuilt {
-    color: #22d3ee;
-}
-
-.versionDropdownLoaderNeoforge {
-    color: #f472b6;
+    color: #ffbfba;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .versionDropdownCheck {

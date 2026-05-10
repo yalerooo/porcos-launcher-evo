@@ -1,0 +1,88 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.loadingContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 1rem;
+    color: #71717a;
+}
+
+.loadingContainer p {
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.modsList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 2rem;
+    text-align: center;
+}
+
+.emptyTitle {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #a1a1aa;
+}
+
+.emptySubtitle {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    color: #71717a;
+}
+
+.actionsBar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background-color: #18181b;
+    border-top: 1px solid #27272a;
+}
+
+.verifyButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background-color: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    color: #fafafa;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.verifyButton:hover:not(:disabled) {
+    background-color: #3f3f46;
+    border-color: #52525b;
+}
+
+.verifyButton:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}

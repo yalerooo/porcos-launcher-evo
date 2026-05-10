@@ -1,0 +1,257 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    background-color: #18181b;
+    border-bottom: 1px solid #27272a;
+}
+
+.searchContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 0.75rem;
+    color: #71717a;
+    pointer-events: none;
+}
+
+.searchInput {
+    width: 100%;
+    padding: 0.625rem 2.5rem;
+    background-color: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    color: #fafafa;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.searchInput::placeholder {
+    color: #71717a;
+}
+
+.searchInput:focus {
+    border-color: #ffbfba;
+}
+
+.clearSearchButton {
+    position: absolute;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background-color: #3f3f46;
+    color: #a1a1aa;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.clearSearchButton:hover {
+    background-color: #52525b;
+    color: #fafafa;
+}
+
+.filtersRow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.filterDropdownContainer {
+    position: relative;
+}
+
+.filterButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background-color: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    color: #a1a1aa;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.filterButton:hover {
+    background-color: #3f3f46;
+    border-color: #52525b;
+}
+
+.filterButtonActive {
+    background-color: #3f3f46;
+    border-color: #ffbfba;
+    color: #fafafa;
+}
+
+.filterIcon {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.filterLabel {
+    font-weight: 500;
+}
+
+.filterBadge {
+    padding: 0.125rem 0.375rem;
+    background-color: #52525b;
+    border-radius: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: #fafafa;
+}
+
+.filterChevron {
+    transition: transform 0.15s ease;
+}
+
+.filterChevronOpen {
+    transform: rotate(180deg);
+}
+
+.dropdownMenu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 0.25rem;
+    min-width: 160px;
+    background-color: #18181b;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    z-index: 50;
+    animation: dropdownFade 0.15s ease;
+}
+
+@keyframes dropdownFade {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdownItem {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    background-color: transparent;
+    border: none;
+    color: #a1a1aa;
+    font-size: 0.8125rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+.dropdownItem:hover {
+    background-color: #27272a;
+    color: #fafafa;
+}
+
+.dropdownItemActive {
+    background-color: #27272a;
+    color: #fafafa;
+}
+
+.dropdownIcon {
+    font-size: 0.75rem;
+    font-weight: 700;
+    width: 16px;
+    text-align: center;
+}
+
+.dropdownCheck {
+    margin-left: auto;
+    color: #22c55e;
+}
+
+.clearAllButton {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    background-color: transparent;
+    border: 1px solid #3f3f46;
+    border-radius: 0.5rem;
+    color: #71717a;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: auto;
+}
+
+.clearAllButton:hover {
+    background-color: #27272a;
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.countsBar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid #27272a;
+}
+
+.countItem {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: #22c55e;
+}
+
+.countItemDisabled {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: #fbbf24;
+}
+
+.countItemUpdates {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    color: #ef4444;
+}
+
+@media (max-width: 640px) {
+    .filtersRow {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 0.25rem;
+        margin-bottom: -0.25rem;
+    }
+
+    .filterButton {
+        flex-shrink: 0;
+    }
+
+    .clearAllButton {
+        flex-shrink: 0;
+    }
+}

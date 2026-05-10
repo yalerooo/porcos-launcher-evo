@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, Settings, Terminal, LogOut, Box } from 'lucide-react';
+import { Home, Settings, Terminal, LogOut, Box, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/i18n';
 
@@ -21,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, onL
     const menuItems = React.useMemo(() => [
         { id: 'home', icon: Home, label: t('home') },
         { id: 'instances', icon: Box, label: t('instances') },
+        { id: 'mods', icon: Puzzle, label: t('mods') },
         { id: 'settings', icon: Settings, label: t('settings') },
         { id: 'console', icon: Terminal, label: t('console') },
     ], [language, t]);

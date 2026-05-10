@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Home, Box, Settings, Terminal, LogOut, Minus, X, Puzzle, AlertCircle, Square, Copy } from 'lucide-react';
+import { Home, Box, Settings, Terminal, LogOut, Minus, X, AlertCircle, Square, Copy, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import styles from '../pages/Home.module.css';
 import { useLauncherStore } from '@/stores/launcherStore';
 import { listen } from '@tauri-apps/api/event';
 import { useI18n } from '@/i18n';
+import PlayerSkinPopover from '@/components/PlayerSkinPopover';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -28,195 +29,77 @@ export default function MainLayout({
 }: MainLayoutProps) {
   const appWindow = getCurrentWindow();
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isSkinPopoverOpen, setIsSkinPopoverOpen] = useState(false);
+  const [skinRefreshKey, setSkinRefreshKey] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState<string>(`https://api.mcheads.org/head/${userProfile.uuid}/40`);
+  const [crashReport, setCrashReport] = useState<{ path: string; content: string } | null>(null);
+  const avatarRef = useRef<HTMLDivElement>(null);
+  const { t } = useI18n();
 
-  useEffect(() => {
-      const updateState = async () => {
-          try {
-              const tauriMax = await appWindow.isMaximized();
-              // Fallback check for Windows where isMaximized might report false incorrectly
-              const isScreenFilled = window.outerWidth >= window.screen.availWidth && window.outerHeight >= window.screen.availHeight;
-              setIsMaximized(tauriMax || isScreenFilled);
-          } catch (e) {
-              console.error("Failed to check window state:", e);
-          }
-      };
-
-      updateState();
-      const unlisten = appWindow.listen('tauri://resize', updateState);
-      window.addEventListener('resize', updateState);
-      
-      return () => {
-          unlisten.then(f => f());
-          window.removeEventListener('resize', updateState);
-      };
-  }, []);
-
-  const { 
-      isLaunching, 
-      selectedInstance, 
-      launchStartTime, 
-      setCrashReport, 
-      setIsLaunching, 
-      setLaunchStartTime, 
-      addLog,
-      crashReport 
-  } = useLauncherStore();
-
-  // Polling for crash reports (Global) - reduced frequency as backup to event-based detection
-  useEffect(() => {
-      if (!isLaunching || !selectedInstance || !launchStartTime) return;
-
-      // Poll every 30 seconds instead of 2 - events handle most cases
-      const POLL_INTERVAL = 30000;
-      const bufferMs = 5000;
-
-      const interval = setInterval(async () => {
-          try {
-              const { invoke } = await import("@tauri-apps/api/core");
-              const { join } = await import("@tauri-apps/api/path");
-
-              const instancePath = await invoke("get_instance_path", { id: selectedInstance.id }) as string;
-              const crashReportsDir = await join(instancePath, "crash-reports");
-
-              const exists = await invoke("file_exists", { path: crashReportsDir }) as boolean;
-              if (!exists) return;
-
-              const files = await invoke("list_files", { path: crashReportsDir }) as {name: string, is_dir: boolean}[];
-
-              // Filter for txt files
-              const reports = files.filter(f => f.name.endsWith(".txt") && f.name.startsWith("crash-"));
-
-              for (const report of reports) {
-                  // Parse timestamp from filename: crash-YYYY-MM-DD_HH.MM.SS-client.txt
-                  const match = report.name.match(/crash-(\d{4})-(\d{2})-(\d{2})_(\d{2})\.(\d{2})\.(\d{2})-client\.txt/);
-                  if (match) {
-                      const [_, year, month, day, hour, minute, second] = match;
-                      const reportDate = new Date(
-                          parseInt(year),
-                          parseInt(month) - 1,
-                          parseInt(day),
-                          parseInt(hour),
-                          parseInt(minute),
-                          parseInt(second)
-                      );
-
-                      // Check if report is newer than launch start time (with buffer)
-                      if (reportDate.getTime() > launchStartTime - bufferMs) {
-                          console.log("Found new crash report via polling:", report.name);
-
-                          const fullPath = await join(crashReportsDir, report.name);
-                          const content = await invoke("read_text_file", { path: fullPath }) as string;
-
-                          setCrashReport({ path: fullPath, content });
-                          setIsLaunching(false);
-                          setLaunchStartTime(null);
-                          clearInterval(interval);
-                          return;
-                      }
-                  }
-              }
-          } catch (e) {
-              console.error("Polling error:", e);
-          }
-      }, POLL_INTERVAL);
-
-      return () => clearInterval(interval);
-  }, [isLaunching, selectedInstance, launchStartTime]);
-
-  // Global Event Listeners
-  useEffect(() => {
-      console.log("Setting up global event listeners in MainLayout...");
-      
-      const setupListeners = async () => {
-          const unlistenExited = await listen('game-exited', () => {
-              console.log("Game exited event received");
-              setIsLaunching(false);
-              setLaunchStartTime(null);
-          });
-          
-          const unlistenCrashed = await listen('game-crashed', (event) => {
-              console.log("Global crash handler received event", event);
-              addLog("Frontend: Received game-crashed event!");
-              const payload = event.payload as { path: string, content: string };
-              setCrashReport(payload);
-              setIsLaunching(false);
-              setLaunchStartTime(null);
-          });
-
-          const unlistenOutput = await listen('game-output', async (event) => {
-              const line = event.payload as string;
-              addLog(line);
-              if (line.includes("#@!@# Game crashed! Crash report saved to: #@!@#")) {
-                  const match = line.match(/#@!@# Game crashed! Crash report saved to: #@!@# (.*)/);
-                  if (match && match[1]) {
-                      const reportPath = match[1].trim();
-                      console.log("Detected crash from console output:", reportPath);
-                      addLog("Frontend: Detected crash via log parsing!");
-                      try {
-                          const { invoke } = await import("@tauri-apps/api/core");
-                          const content = await invoke("read_text_file", { path: reportPath }) as string;
-                          setCrashReport({ path: reportPath, content });
-                          setIsLaunching(false);
-                          setLaunchStartTime(null);
-                      } catch (e) {
-                          console.error("Failed to read crash report from console detection:", e);
-                      }
-                  }
-              }
-          });
-
-          return () => {
-              console.log("Cleaning up global event listeners...");
-              unlistenExited();
-              unlistenCrashed();
-              unlistenOutput();
-          };
-      };
-
-      const cleanupPromise = setupListeners();
-
-      return () => {
-          cleanupPromise.then(cleanup => cleanup());
-      };
-  }, []);
-
-  const { t, language } = useI18n();
-
-  const navItems = useMemo(() => [
+  const navItems = [
     { id: 'home', label: t('home'), icon: Home },
     { id: 'instances', label: t('instances'), icon: Box },
     { id: 'mods', label: t('mods'), icon: Puzzle },
     { id: 'settings', label: t('settings'), icon: Settings },
     { id: 'console', label: t('console'), icon: Terminal },
-  ], [language, t]);
+  ];
 
-  // Avatar URL logic
-  // Use mc-heads to ensure we get a rendered head/avatar, not a raw skin texture
-  const avatarUrl = `https://mc-heads.net/avatar/${userProfile.uuid}/100`;
+  useEffect(() => {
+    setSkinRefreshKey(Date.now());
+  }, []);
+
+  useEffect(() => {
+    setAvatarUrl(`https://api.mcheads.org/head/${userProfile.uuid}/40?t=${skinRefreshKey}`);
+  }, [userProfile.uuid, skinRefreshKey]);
+
+  // Track window maximized state
+  useEffect(() => {
+    const updateMaximized = async () => {
+      try {
+        const tauriMax = await appWindow.isMaximized();
+        const isScreenFilled = window.outerWidth >= window.screen.availWidth && window.outerHeight >= window.screen.availHeight;
+        setIsMaximized(tauriMax || isScreenFilled);
+      } catch {
+        // fallback
+        const isScreenFilled = window.outerWidth >= window.screen.availWidth && window.outerHeight >= window.screen.availHeight;
+        setIsMaximized(isScreenFilled);
+      }
+    };
+
+    updateMaximized();
+    window.addEventListener('resize', updateMaximized);
+    return () => window.removeEventListener('resize', updateMaximized);
+  }, [appWindow]);
 
   return (
-    <div className="launcher-container flex h-screen overflow-hidden bg-[var(--bg-secondary)]">
+    <div className="launcher-container flex h-screen overflow-hidden bg-[var(--bg-secondary)]" data-maximized={isMaximized}>
       
       {/* Sidebar */}
       <aside className="flex-shrink-0 h-full w-[65px] hover:w-[240px] z-50 flex flex-col gap-3 bg-[var(--bg-secondary)] transition-all duration-300 ease-in-out group/sidebar pt-8">
         
         {/* User Profile */}
         <div className={`px-0 group-hover/sidebar:px-3 transition-all duration-300 w-full ${styles.userProfileContainer}`}>
-             <div className="flex items-center w-full py-1 px-0 rounded-[20px] hover:bg-white/5 transition-colors cursor-pointer group/profile relative overflow-hidden whitespace-nowrap justify-start">
-                <div className="min-w-[65px] h-[40px] relative flex items-center justify-center">
-                    <div className="w-[40px] h-[40px] rounded-xl overflow-hidden transition-all">
-                        <img 
-                            src={avatarUrl} 
-                            alt={userProfile.username}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).src = `https://mc-heads.net/avatar/MHF_Steve/100`;
-                            }}
-                        />
+             <div
+               ref={avatarRef}
+               className="flex items-center w-full py-1 px-0 rounded-[20px] hover:bg-white/5 transition-colors cursor-pointer group/profile relative overflow-hidden whitespace-nowrap justify-start"
+               onClick={() => setIsSkinPopoverOpen(true)}
+             >
+                 <div className="min-w-[65px] h-[40px] relative flex items-center justify-center">
+                    <div className="w-[40px] h-[40px] rounded-xl overflow-hidden transition-all ring-2 ring-transparent hover:ring-[#ffbfba] hover:ring-offset-2 hover:ring-offset-[#18181b]">
+                        {avatarUrl ? (
+                            <img
+                                key={skinRefreshKey}
+                                src={avatarUrl}
+                                alt={userProfile.username}
+                                className="w-full h-full object-cover"
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-[#27272a]" />
+                        )}
                     </div>
                     <div className="absolute bottom-0 right-1 w-4 h-4 bg-[#22c55e] border-[3px] border-[#18181b] rounded-full z-10"></div>
                 </div>
-                
+
                 <div className="ml-0 max-w-0 overflow-hidden opacity-0 group-hover/sidebar:max-w-[200px] group-hover/sidebar:opacity-100 group-hover/sidebar:ml-3 transition-all duration-300 flex flex-col justify-center">
                     <span className="font-bold text-white text-lg truncate max-w-[120px] leading-tight">{userProfile.username}</span>
                     <span className="text-xs text-green-400 font-medium">{t('online')}</span>
@@ -325,7 +208,10 @@ export default function MainLayout({
           </div>
           
           {/* Main Content */}
-          <main className="content-area flex-1 overflow-hidden bg-[var(--bg-primary)] relative rounded-tl-[30px]">
+          <main
+            className="content-area flex-1 overflow-hidden bg-[var(--bg-primary)] relative"
+            style={{ borderTopLeftRadius: isMaximized ? 0 : 30 }}
+          >
             <div className="w-full h-full overflow-hidden">
               {children}
             </div>
@@ -335,8 +221,9 @@ export default function MainLayout({
       {/* Global Crash Report Modal */}
       {crashReport && (
         <div 
-            className="fixed top-[56px] right-0 bottom-0 left-[65px] z-[100] flex items-center justify-center p-8 rounded-tl-[30px]" 
+            className="fixed top-[56px] right-0 bottom-0 left-[65px] z-[100] flex items-center justify-center p-8"
             style={{
+                borderTopLeftRadius: isMaximized ? 0 : 30,
                 background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 100%)',
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)'
@@ -380,6 +267,14 @@ export default function MainLayout({
             </div>
         </div>
       )}
+
+      {/* Skin Popover */}
+      <PlayerSkinPopover
+        isOpen={isSkinPopoverOpen}
+        onClose={() => setIsSkinPopoverOpen(false)}
+        onSkinChanged={() => setSkinRefreshKey(Date.now())}
+        triggerRef={avatarRef}
+      />
     </div>
   );
 }

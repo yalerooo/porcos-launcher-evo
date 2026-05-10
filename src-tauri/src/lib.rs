@@ -32,6 +32,7 @@ pub fn run() {
             commands::auth::login_microsoft,
             commands::auth::login_offline,
             commands::auth::open_url,
+            commands::auth::validate_and_refresh_token,
             commands::launcher::get_available_versions,
             commands::launcher::launch_minecraft,
             commands::launcher::generate_offline_uuid,
@@ -64,8 +65,16 @@ pub fn run() {
             commands::files::rename_file,
             commands::files::remove_dir,
             commands::files::merge_dir,
+            commands::files::create_dir,
             commands::files::get_file_hash,
             commands::files::get_file_hash_murmur2,
+            commands::skin::get_minecraft_profile_full,
+            commands::skin::upload_minecraft_skin,
+            commands::skin::upload_minecraft_cape,
+            commands::skin::set_minecraft_active_cape,
+            commands::skin::set_minecraft_active_skin,
+            commands::skin::download_skin_from_url,
+            commands::skin::get_skin_as_base64,
             set_complete
         ])
         .setup(|app| {

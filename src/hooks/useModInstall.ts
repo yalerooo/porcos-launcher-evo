@@ -19,7 +19,7 @@ interface UseModInstallOptions {
   saveInstalledMod: (modInfo: any) => Promise<void>;
   setInstalledMods: (fn: React.SetStateAction<Map<string, InstalledMod>>) => void;
   setInstalledSlugs: (fn: React.SetStateAction<Map<string, InstalledMod>>) => void;
-  setUpdatesAvailable: (fn: React.SetStateAction<Map<string, boolean>>) => void;
+  setUpdatesAvailable: (fn: React.SetStateAction<Map<string, { currentVersion: string; newVersion: string; changelog?: string }>>) => void;
   showConfirmAsync: (opts: { title: string; message: string; confirmText?: string; danger?: boolean }) => Promise<boolean>;
 }
 
@@ -48,7 +48,7 @@ export function useModInstall({
   const installModrinth = async (
     projectId: string, version: string, loader: string, instancePath: string,
     visited: Set<string> = new Set(), specificVersionId?: string,
-    isDependency = false, onProgress?: (msg: string) => void,
+    isDependency = false, onProgress?: (msg: string) => void, targetFolder = 'mods',
   ): Promise<any[]> => {
     if (visited.has(projectId)) return [];
     visited.add(projectId);
@@ -83,7 +83,7 @@ export function useModInstall({
         const dep = requiredDeps[i];
         onProgress?.(`Dependency ${i + 1}/${requiredDeps.length}: ${dep.project_id}`);
         try {
-          const deps = await installModrinth(dep.project_id, version, loader, instancePath, visited, undefined, true, onProgress);
+          const deps = await installModrinth(dep.project_id, version, loader, instancePath, visited, undefined, true, onProgress, targetFolder);
           installedFiles = [...installedFiles, ...deps];
         } catch (e: any) {
           installedFiles.push({ name: dep.project_id, file: '', icon: undefined, error: e.message || String(e) });
@@ -92,7 +92,8 @@ export function useModInstall({
     }
 
     const file = compatibleVersion.files.find((f: any) => f.primary) || compatibleVersion.files[0];
-    const filePath = await join(instancePath, 'mods', file.filename);
+    const targetPath = await ensureFolderExists(instancePath, targetFolder);
+    const filePath = await join(targetPath, file.filename);
     const fileExists = await invoke('file_exists', { path: filePath }) as boolean;
     if (fileExists && isDependency) return installedFiles;
 
@@ -110,6 +111,7 @@ export function useModInstall({
     await saveInstalledMod({
       id: projectId, source: 'modrinth', versionId: compatibleVersion.id,
       version: compatibleVersion.version_number, file: file.filename,
+      name, icon,
     });
 
     installedFiles.push({ name, file: file.filename, icon });
@@ -119,7 +121,7 @@ export function useModInstall({
   const installCurseForge = async (
     modId: string, version: string, loader: string, instancePath: string,
     visited: Set<string> = new Set(), specificFileId?: number,
-    isDependency = false, onProgress?: (msg: string) => void,
+    isDependency = false, onProgress?: (msg: string) => void, targetFolder = 'mods',
   ): Promise<any[]> => {
     if (visited.has(modId)) return [];
     visited.add(modId);
@@ -162,7 +164,7 @@ export function useModInstall({
         const dep = requiredDeps[i];
         onProgress?.(`Dependency ${i + 1}/${requiredDeps.length}: ${dep.modId}`);
         try {
-          const deps = await installCurseForge(dep.modId.toString(), version, loader, instancePath, visited, undefined, true, onProgress);
+          const deps = await installCurseForge(dep.modId.toString(), version, loader, instancePath, visited, undefined, true, onProgress, targetFolder);
           installedFiles = [...installedFiles, ...deps];
         } catch (e: any) {
           installedFiles.push({ name: dep.modId.toString(), file: '', icon: undefined, error: e.message || String(e) });
@@ -170,7 +172,8 @@ export function useModInstall({
       }
     }
 
-    const filePath = await join(instancePath, 'mods', compatibleFile.fileName);
+    const targetPath = await ensureFolderExists(instancePath, targetFolder);
+    const filePath = await join(targetPath, compatibleFile.fileName);
     const fileExists = await invoke('file_exists', { path: filePath }) as boolean;
     if (fileExists && isDependency) return installedFiles;
 
@@ -188,10 +191,32 @@ export function useModInstall({
     await saveInstalledMod({
       id: modId, source: 'curseforge', versionId: compatibleFile.id.toString(),
       version: compatibleFile.displayName, file: compatibleFile.fileName,
+      name, icon,
     });
 
     installedFiles.push({ name, file: compatibleFile.fileName, icon });
     return installedFiles;
+  };
+
+  const getTargetFolder = (searchType: string): string => {
+    switch (searchType) {
+      case 'shaders':
+        return 'shaderpacks';
+      case 'texture_packs':
+        return 'resourcepacks';
+      case 'mods':
+      default:
+        return 'mods';
+    }
+  };
+
+  const ensureFolderExists = async (instancePath: string, folder: string): Promise<string> => {
+    const folderPath = await join(instancePath, folder);
+    const exists = await invoke('file_exists', { path: folderPath }) as boolean;
+    if (!exists) {
+      await invoke('create_dir', { path: folderPath });
+    }
+    return folderPath;
   };
 
   const handleInstall = async (item: any, selectedVersion?: any, options: { silent?: boolean; ignoreLock?: boolean } = {}) => {
@@ -205,11 +230,14 @@ export function useModInstall({
 
     try {
       const instancePath = await invoke('get_instance_path', { id: targetInstanceId }) as string;
+      const targetFolder = getTargetFolder(searchType);
+      const targetPath = await ensureFolderExists(instancePath, targetFolder);
+
       let installed = installedMods.get(item.id);
       if (!installed && item.original?.slug) installed = installedSlugs.get(item.original.slug.toLowerCase());
 
       if (installed) {
-        const oldFilePath = await join(instancePath, 'mods', installed.file);
+        const oldFilePath = await join(targetPath, installed.file);
         const exists = await invoke('file_exists', { path: oldFilePath }) as boolean;
         if (exists) await invoke('delete_file', { path: oldFilePath });
       }
@@ -217,9 +245,9 @@ export function useModInstall({
       let installedFiles: any[] = [];
       const progressCb = (msg: string) => setVerificationStatus(msg);
       if (item.source === 'modrinth') {
-        installedFiles = await installModrinth(item.id, filterVersion, filterLoader, instancePath, new Set(), selectedVersion?.id, false, progressCb);
+        installedFiles = await installModrinth(item.id, filterVersion, filterLoader, instancePath, new Set(), selectedVersion?.id, false, progressCb, targetFolder);
       } else if (item.source === 'curseforge') {
-        installedFiles = await installCurseForge(item.id, filterVersion, filterLoader, instancePath, new Set(), selectedVersion?.id, false, progressCb);
+        installedFiles = await installCurseForge(item.id, filterVersion, filterLoader, instancePath, new Set(), selectedVersion?.id, false, progressCb, targetFolder);
       }
 
       setInstalledModName(item.name);

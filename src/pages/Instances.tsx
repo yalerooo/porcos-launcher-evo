@@ -1,16 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Play, Trash2, Loader2, Search, Cpu, Check, AlertCircle, SearchX, Settings, ChevronDown, CheckIcon, Clock, Star } from 'lucide-react';
+import { Plus, Play, Trash2, Loader2, Search, Check, AlertCircle, SearchX, Settings, ChevronDown, CheckIcon, Clock, Star } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useLauncherStore, Instance, getCachedImages } from '@/stores/launcherStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { parseVersion, formatVersion } from '@/lib/versionParser';
+import { formatPlayTime, formatTimeAgo } from '@/lib/timeFormat';
 import styles from './Instances.module.css';
 import CreateInstanceModal from '@/components/CreateInstanceModal';
 import InstanceDetails from '@/components/InstanceDetails';
 import InstanceSettings from '@/components/InstanceSettings';
+import fabricIcon from '@/assets/modloader-icons/fabric.png';
+import forgeIcon from '@/assets/modloader-icons/forge.png';
+import neoforgeIcon from '@/assets/modloader-icons/neoforge.png';
+import quiltIcon from '@/assets/modloader-icons/quilt.png';
+import vanillaIcon from '@/assets/modloader-icons/vanilla.png';
+
+const modLoaderIcons: Record<string, string> = {
+    fabric: fabricIcon,
+    forge: forgeIcon,
+    neoforge: neoforgeIcon,
+    quilt: quiltIcon,
+    vanilla: vanillaIcon,
+    'fabric api': fabricIcon,
+};
+
+const getModLoaderIcon = (modLoader?: string) => {
+    if (!modLoader) return vanillaIcon;
+    const key = modLoader.toLowerCase();
+    return modLoaderIcons[key] || vanillaIcon;
+};
 
 interface InstanceCardProps {
     instance: Instance;
@@ -69,8 +90,9 @@ const VersionDropdown: React.FC<VersionDropdownProps> = ({ versions, currentVers
                         <div className={styles.versionDropdownMain}>
                             <span className={styles.versionDropdownVersion}>{parsed.mcVersion}</span>
                             {parsed.loader && (
-                                <span className={cn(styles.versionDropdownLoader, styles[`versionDropdownLoader${parsed.loader.charAt(0).toUpperCase() + parsed.loader.slice(1)}`])}>
-                                    {parsed.loader}
+                                <span className={cn(styles.versionDropdownLoader)}>
+                                    <img src={getModLoaderIcon(parsed.loader)} alt={parsed.loader} className={styles.modLoaderIconSmall} />
+                                    <span>{parsed.loader}</span>
                                 </span>
                             )}
                         </div>
@@ -82,19 +104,25 @@ const VersionDropdown: React.FC<VersionDropdownProps> = ({ versions, currentVers
     );
 };
 
-function formatTimeAgo(timestamp: number): string {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
+function useTimeAgo(timestamp: number | undefined) {
+    const [text, setText] = React.useState(() => timestamp ? formatTimeAgo(timestamp) : '');
 
-    if (days > 0) return days === 1 ? '1 día' : `${days} días`;
-    if (hours > 0) return hours === 1 ? '1 hora' : `${hours} horas`;
-    if (minutes > 0) return minutes === 1 ? '1 min' : `${minutes} mins`;
-    return 'Ahora';
+    React.useEffect(() => {
+        if (!timestamp) return;
+        setText(formatTimeAgo(timestamp));
+        const interval = setInterval(() => {
+            setText(formatTimeAgo(timestamp));
+        }, 60000);
+        return () => clearInterval(interval);
+    }, [timestamp]);
+
+    return text;
 }
+
+const TimeAgoLabel: React.FC<{ timestamp: number }> = ({ timestamp }) => {
+    const text = useTimeAgo(timestamp);
+    return <>{text}</>;
+};
 
 const InstanceCard: React.FC<InstanceCardProps> = React.memo(({ instance, index, onClick, onPlay, onDelete, onUpdate, isLaunching }) => {
     const { t } = useI18n();
@@ -146,13 +174,6 @@ const InstanceCard: React.FC<InstanceCardProps> = React.memo(({ instance, index,
         }
     };
 
-    const modLoaderBadgeClass = instance.modLoader ? {
-        fabric: styles.instanceBadgeFabric,
-        forge: styles.instanceBadgeForge,
-        quilt: styles.instanceBadgeQuilt,
-        neo: styles.instanceBadgeNeo,
-    }[instance.modLoader.toLowerCase()] || styles.instanceBadgeVanilla : styles.instanceBadgeVanilla;
-
     const [showVersionDropdown, setShowVersionDropdown] = useState(false);
     const parsedCurrentVersion = parseVersion(currentVersion);
     const versionDropdownRef = useRef<HTMLDivElement>(null);
@@ -177,13 +198,14 @@ const InstanceCard: React.FC<InstanceCardProps> = React.memo(({ instance, index,
                         {parsedCurrentVersion.mcVersion}
                     </span>
                     {instance.modLoader ? (
-                        <span className={cn(styles.instanceBadge, modLoaderBadgeClass)}>
-                            <Cpu size={10} />
+                        <span className={cn(styles.instanceBadge, styles.instanceBadgeLoader)}>
+                            <img src={getModLoaderIcon(instance.modLoader)} alt={instance.modLoader} className={styles.modLoaderIcon} />
                             <span className="capitalize">{instance.modLoader}</span>
                         </span>
                     ) : (
-                        <span className={cn(styles.instanceBadge, styles.instanceBadgeVanilla)}>
-                            Vanilla
+                        <span className={cn(styles.instanceBadge, styles.instanceBadgeLoader)}>
+                            <img src={vanillaIcon} alt="Vanilla" className={styles.modLoaderIcon} />
+                            <span>Vanilla</span>
                         </span>
                     )}
                     {hasMultipleVersions && (
@@ -217,12 +239,20 @@ const InstanceCard: React.FC<InstanceCardProps> = React.memo(({ instance, index,
                             </AnimatePresence>
                         </div>
                     )}
-                    {instance.lastPlayed && (
-                        <span className={styles.lastPlayed}>
-                            <Clock size={10} />
-                            <span>{formatTimeAgo(instance.lastPlayed)}</span>
-                        </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {(instance.totalPlayTime !== undefined && instance.totalPlayTime > 0) && (
+                            <span className={styles.lastPlayed}>
+                                <Clock size={10} />
+                                <span>{formatPlayTime(instance.totalPlayTime)}</span>
+                            </span>
+                        )}
+                        {instance.lastPlayed && (
+                            <span className={cn(styles.lastPlayed, 'opacity-50')}>
+                                <span>·</span>
+                                <span><TimeAgoLabel timestamp={instance.lastPlayed} /></span>
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -341,6 +371,68 @@ const Instances: React.FC = () => {
                     }
                 });
                 unlisteners.push(unlistenDownload);
+
+                const unlistenGameExited = await listen('game-exited', () => {
+                    const state = useLauncherStore.getState();
+                    const startTime = state.launchStartTime;
+                    const selectedInstance = state.selectedInstance;
+                    if (startTime && selectedInstance) {
+                        const sessionDuration = Date.now() - startTime;
+                        const currentTotal = selectedInstance.totalPlayTime || 0;
+                        const newTotal = currentTotal + sessionDuration;
+                        const newLongest = Math.max(selectedInstance.longestSession || 0, sessionDuration);
+                        const newCount = (selectedInstance.sessionCount || 0) + 1;
+
+                        invoke("update_instance", {
+                            id: selectedInstance.id,
+                            totalPlayTime: newTotal,
+                            longestSession: newLongest,
+                            sessionCount: newCount,
+                            lastPlayed: Date.now()
+                        }).catch((e) => console.error("Failed to update play time:", e));
+
+                        updateInstance(selectedInstance.id, {
+                            totalPlayTime: newTotal,
+                            longestSession: newLongest,
+                            sessionCount: newCount,
+                            lastPlayed: Date.now()
+                        });
+                    }
+                    setIsLaunching(false);
+                    setLaunchStartTime(null);
+                });
+                unlisteners.push(unlistenGameExited);
+
+                const unlistenGameCrashed = await listen('game-crashed', () => {
+                    const state = useLauncherStore.getState();
+                    const startTime = state.launchStartTime;
+                    const selectedInstance = state.selectedInstance;
+                    if (startTime && selectedInstance) {
+                        const sessionDuration = Date.now() - startTime;
+                        const currentTotal = selectedInstance.totalPlayTime || 0;
+                        const newTotal = currentTotal + sessionDuration;
+                        const newLongest = Math.max(selectedInstance.longestSession || 0, sessionDuration);
+                        const newCount = (selectedInstance.sessionCount || 0) + 1;
+
+                        invoke("update_instance", {
+                            id: selectedInstance.id,
+                            totalPlayTime: newTotal,
+                            longestSession: newLongest,
+                            sessionCount: newCount,
+                            lastPlayed: Date.now()
+                        }).catch((e) => console.error("Failed to update play time:", e));
+
+                        updateInstance(selectedInstance.id, {
+                            totalPlayTime: newTotal,
+                            longestSession: newLongest,
+                            sessionCount: newCount,
+                            lastPlayed: Date.now()
+                        });
+                    }
+                    setIsLaunching(false);
+                    setLaunchStartTime(null);
+                });
+                unlisteners.push(unlistenGameCrashed);
 
             } catch (error) {
                 console.error("Failed to setup event listeners:", error);

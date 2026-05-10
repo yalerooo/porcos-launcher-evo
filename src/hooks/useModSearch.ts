@@ -9,7 +9,7 @@ import {
 } from '@/lib/modApiService';
 
 type ModSource = 'modrinth' | 'curseforge' | 'porcos';
-type SearchType = 'mods' | 'modpacks' | 'updates';
+type SearchType = 'mods' | 'modpacks' | 'shaders' | 'texture_packs' | 'updates';
 
 interface InstalledMod {
   file: string;
@@ -38,7 +38,48 @@ const CATEGORIES = [
   { id: "world-generation", nameKey: "catWorldGeneration", cfId: 409 },
 ];
 
-export { CATEGORIES };
+const SHADER_CATEGORIES = [
+  { id: "realistic", nameKey: "catRealistic", cfId: 6553, section: "category" },
+  { id: "fantasy", nameKey: "catFantasy", cfId: 6554, section: "category" },
+  { id: "vanilla", nameKey: "catVanilla", cfId: 6555, section: "category" },
+  { id: "atmospheric", nameKey: "catAtmospheric", cfId: 6556, section: "feature" },
+  { id: "colored-lighting", nameKey: "catColoredLighting", cfId: 6557, section: "feature" },
+  { id: "shadows", nameKey: "catShadows", cfId: 6558, section: "feature" },
+  { id: "lighting", nameKey: "catLighting", cfId: 6559, section: "feature" },
+  { id: "blur", nameKey: "catBlur", cfId: 6560, section: "feature" },
+  { id: "waving-plants", nameKey: "catWavingPlants", cfId: 6561, section: "feature" },
+  { id: "waving-liquid", nameKey: "catWavingLiquid", cfId: 6562, section: "feature" },
+  { id: "waving-tall-grass", nameKey: "catWavingTallGrass", cfId: 6563, section: "feature" },
+  { id: "texture-changes", nameKey: "catTextureChanges", cfId: 6564, section: "feature" },
+  { id: "iris", nameKey: "catIris", cfId: 6565, section: "loader" },
+  { id: "sodium", nameKey: "catSodium", cfId: 6566, section: "loader" },
+  { id: "optifine", nameKey: "catOptiFine", cfId: 6567, section: "loader" },
+  { id: "canvas", nameKey: "catCanvas", cfId: 6568, section: "loader" },
+  { id: "worldculling", nameKey: "catWorldCulling", cfId: 6569, section: "performance" },
+  { id: " AO", nameKey: "catAO", cfId: 6570, section: "performance" },
+  { id: "shaders-compat", nameKey: "catShadersCompat", cfId: 6571, section: "performance" },
+];
+
+const RESOURCE_PACK_CATEGORIES = [
+  { id: "16x", nameKey: "cat16x", cfId: 393, section: "resolution" },
+  { id: "32x", nameKey: "cat32x", cfId: 394, section: "resolution" },
+  { id: "64x", nameKey: "cat64x", cfId: 395, section: "resolution" },
+  { id: "128x", nameKey: "cat128x", cfId: 396, section: "resolution" },
+  { id: "256x", nameKey: "cat256x", cfId: 397, section: "resolution" },
+  { id: "512x-or-higher", nameKey: "cat512xOrHigher", cfId: 398, section: "resolution" },
+  { id: "steampunk", nameKey: "catSteampunk", cfId: 399, section: "style" },
+  { id: "photo-realistic", nameKey: "catPhotoRealistic", cfId: 400, section: "style" },
+  { id: "modern", nameKey: "catModern", cfId: 401, section: "style" },
+  { id: "medieval", nameKey: "catMedieval", cfId: 402, section: "style" },
+  { id: "traditional", nameKey: "catTraditional", cfId: 403, section: "style" },
+  { id: "animated", nameKey: "catAnimated", cfId: 404, section: "style" },
+  { id: "miscellaneous", nameKey: "catMiscellaneous", cfId: 405, section: "style" },
+  { id: "mod-support", nameKey: "catModSupport", cfId: 4465, section: "feature" },
+  { id: "font-packs", nameKey: "catFontPacks", cfId: 5244, section: "feature" },
+  { id: "data-packs", nameKey: "catDataPacks", cfId: 5193, section: "feature" },
+];
+
+export { CATEGORIES, SHADER_CATEGORIES, RESOURCE_PACK_CATEGORIES };
 export type { ModSource, SearchType, InstalledMod };
 
 const formatNumber = (num: number) => {
@@ -78,7 +119,10 @@ export function useModSearch({
     const requestId = ++currentDataRequestId.current;
     try {
       const facets: string[][] = [];
-      facets.push(searchType === 'modpacks' ? ["project_type:modpack"] : ["project_type:mod"]);
+      if (searchType === 'modpacks') facets.push(["project_type:modpack"]);
+      else if (searchType === 'shaders') facets.push(["project_type:shader"]);
+      else if (searchType === 'texture_packs') facets.push(["project_type:resourcepack"]);
+      else facets.push(["project_type:mod"]);
       if (filterVersion) facets.push([`versions:${filterVersion}`]);
       if (filterLoader) facets.push([`categories:${filterLoader}`]);
       if (filterCategory) facets.push([`categories:${filterCategory}`]);
@@ -108,8 +152,9 @@ export function useModSearch({
   const searchCurseForge = async (query: string, pageIndex: number) => {
     const requestId = ++currentDataRequestId.current;
     try {
-      const classId = searchType === 'modpacks' ? 4471 : 6;
-      const cat = filterCategory ? CATEGORIES.find(c => c.id === filterCategory) : null;
+      const classId = searchType === 'modpacks' ? 4471 : searchType === 'shaders' ? 6552 : searchType === 'texture_packs' ? 12 : 6;
+      const categories = searchType === 'shaders' ? SHADER_CATEGORIES : searchType === 'texture_packs' ? RESOURCE_PACK_CATEGORIES : CATEGORIES;
+      const cat = filterCategory ? categories.find(c => c.id === filterCategory) : null;
 
       const data = await apiSearchCurseForge(query, classId, {
         gameVersion: filterVersion || undefined,

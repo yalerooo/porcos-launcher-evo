@@ -146,6 +146,9 @@ export interface Instance {
     backgroundImage?: string;
     created: number;
     lastPlayed?: number; // Unix timestamp of last play time
+    totalPlayTime?: number; // Total play time in milliseconds
+    longestSession?: number; // Longest session in milliseconds
+    sessionCount?: number; // Number of play sessions
     isFavorite?: boolean;
 }
 

@@ -53,9 +53,16 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
     const handleMicrosoftLogin = async () => {
         setIsLoading(true);
+        console.log('[Login] Starting Microsoft login...');
         try {
             const { invoke } = await import("@tauri-apps/api/core");
+            console.log('[Login] Calling login_microsoft command...');
             const result: any = await invoke('login_microsoft');
+            console.log('[Login] login_microsoft result:', result);
+            console.log('[Login] result.access_token (first 30 chars):', result.access_token?.substring(0, 30));
+            console.log('[Login] result.refresh_token (first 30 chars):', result.refresh_token?.substring(0, 30));
+            console.log('[Login] result.refresh_token === "managed_by_xal"?', result.refresh_token === 'managed_by_xal');
+            console.log('[Login] result.expires_in:', result.expires_in);
 
             const profile = {
                 username: result.username || 'Player',
@@ -67,10 +74,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 expiresAt: Date.now() + (result.expires_in * 1000)
             };
 
+            console.log('[Login] Created profile, expiresAt:', profile.expiresAt);
+            console.log('[Login] Time until expiry (hours):', (result.expires_in / 3600).toFixed(2));
+
             setUser(profile);
+            console.log('[Login] Calling onLoginSuccess...');
             onLoginSuccess(profile);
         } catch (error) {
-            console.error("Login failed:", error);
+            console.error("[Login] Microsoft login failed:", error);
+            console.error("[Login] Error details:", JSON.stringify(error, null, 2));
             setIsLoading(false);
         }
     };

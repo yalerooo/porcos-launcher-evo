@@ -39,17 +39,51 @@ function App() {
   // Check for existing session on mount
   React.useEffect(() => {
     const checkSession = async () => {
-      if (isAuthenticated && user && isTokenValid()) {
-        setUserProfile({
-          username: user.username,
-          uuid: user.uuid,
-          mode: user.mode,
-          skinUrl: user.skinUrl
-        });
-        setCurrentView('app');
-      } else if (isAuthenticated && user && !isTokenValid()) {
-        // Token expired, logout
-        logout();
+      if (isAuthenticated && user) {
+        console.log('[App] User is authenticated, checking token validity...');
+        console.log('[App] isTokenValid():', isTokenValid());
+        console.log('[App] expiresAt:', user.expiresAt);
+        console.log('[App] Time until expiry (minutes):', user.expiresAt ? ((user.expiresAt - Date.now()) / 1000 / 60).toFixed(1) : 'N/A');
+
+        // Only validate with server if the token might be expired (within 1 hour of expiry)
+        // This avoids unnecessary API calls and rate limiting
+        let isValid = false;
+        const tokenExpiryBuffer = 60 * 60 * 1000; // 1 hour buffer
+        const isTokenExpired = user.expiresAt && (Date.now() > user.expiresAt - tokenExpiryBuffer);
+
+        if (user.mode === 'microsoft' && user.accessToken && user.refreshToken) {
+          if (isTokenExpired) {
+            console.log('[App] Token expired or near expiry, calling validateAndRefresh...');
+            isValid = await useAuthStore.getState().validateAndRefresh();
+            console.log('[App] validateAndRefresh result:', isValid);
+          } else {
+            console.log('[App] Token still valid (local check), skipping server validation');
+            isValid = true;
+          }
+        } else if (user.mode === 'offline') {
+          isValid = true;
+        } else {
+          isValid = isTokenValid();
+        }
+
+        console.log('[App] Final isValid:', isValid);
+
+        if (isValid) {
+          setUserProfile({
+            username: user.username,
+            uuid: user.uuid,
+            mode: user.mode,
+            skinUrl: user.skinUrl
+          });
+          setCurrentView('app');
+        } else {
+          // Token expired and could not be refreshed
+          console.log('[App] Token invalid or refresh failed, showing login');
+          logout();
+          setCurrentView('login');
+        }
+      } else {
+        console.log('[App] No authenticated user, showing login');
         setCurrentView('login');
       }
       setIsLoading(false);

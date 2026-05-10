@@ -17,7 +17,7 @@ interface ModDetailsViewProps {
     isInstalling: boolean;
     isInstalled: boolean;
     hasUpdate?: boolean;
-    type: 'mods' | 'modpacks' | 'updates';
+    type: 'mods' | 'modpacks' | 'shaders' | 'texture_packs' | 'updates';
     gameVersion?: string;
     loader?: string;
 }

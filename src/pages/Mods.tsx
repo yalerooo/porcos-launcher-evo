@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Download, Loader2, Filter, Box, Package, ChevronDown, Plus, Gamepad2, Cpu, Check, RefreshCw, ShieldCheck, Trash2, Power } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Search, Loader2, Filter, Box, Package, ChevronDown, Gamepad2, Cpu, Check, ShieldCheck, RefreshCw, Sparkles, Palette } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
 import { useLauncherStore } from '@/stores/launcherStore';
@@ -10,11 +9,14 @@ import ModInstallSuccessModal from '@/components/ModInstallSuccessModal';
 import ModDetailsView from '@/components/ModDetailsView';
 import ConfirmModal from '@/components/ConfirmModal';
 import DependencySelectModal, { type DependencyItem } from '@/components/DependencySelectModal';
+import ModCard from '@/components/ModCard';
+import UpdatesModal from '@/components/UpdatesModal';
+import VerifyDepsModal from '@/components/VerifyDepsModal';
 import { useI18n } from '@/i18n';
-import { useModSearch, CATEGORIES, type ModSource, type SearchType } from '@/hooks/useModSearch';
+import { useModSearch, CATEGORIES, SHADER_CATEGORIES, RESOURCE_PACK_CATEGORIES, type ModSource, type SearchType } from '@/hooks/useModSearch';
 import { useInstalledMods } from '@/hooks/useInstalledMods';
 import { useModInstall } from '@/hooks/useModInstall';
-import { useModUpdates } from '@/hooks/useModUpdates';
+import { useModUpdates, type UpdateInfo } from '@/hooks/useModUpdates';
 
 import styles from './Mods.module.css';
 
@@ -148,12 +150,36 @@ const Mods: React.FC = () => {
     const [page, setPage] = useState(0);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+    // Accordion state for shader/texture pack categories
+    const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+    const toggleSection = (section: string) => {
+        setCollapsedSections(prev => {
+            const next = new Set(prev);
+            if (next.has(section)) {
+                next.delete(section);
+            } else {
+                next.add(section);
+            }
+            return next;
+        });
+    };
+
     // Mod Details
     const [selectedItem, setSelectedItem] = useState<any>(null);
     const [availableVersions, setAvailableVersions] = useState<any[]>([]);
 
     // Elevated state shared between hooks
-    const [updatesAvailable, setUpdatesAvailable] = useState<Map<string, boolean>>(new Map());
+    const [updatesAvailable, setUpdatesAvailable] = useState<Map<string, UpdateInfo>>(new Map());
+
+    // Modal states
+    const [showUpdatesModal, setShowUpdatesModal] = useState(false);
+    const [showVerifyDepsModal, setShowVerifyDepsModal] = useState(false);
+    const [missingDeps, setMissingDeps] = useState<any[]>([]);
+    const [isInstallingDeps, setIsInstallingDeps] = useState(false);
+    const [installStatus, setInstallStatus] = useState('');
+    const [isVerifyingDeps, setIsVerifyingDeps] = useState(false);
+    const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
 
     // Confirm modal state
     const [confirmModal, setConfirmModal] = useState<{
@@ -194,29 +220,13 @@ const Mods: React.FC = () => {
         isOpen: boolean;
         dependencies: DependencyItem[];
     }>({ isOpen: false, dependencies: [] });
-    const depSelectResolveRef = useRef<((val: string[]) => void) | null>(null);
 
-    const showDependencySelectAsync = (deps: DependencyItem[]): Promise<string[]> => {
-        return new Promise((resolve) => {
-            depSelectResolveRef.current = resolve;
-            setDepSelectModal({ isOpen: true, dependencies: deps });
-        });
-    };
-
-    const handleDepSelectConfirm = (selectedIds: string[]) => {
+    const handleDepSelectConfirm = () => {
         setDepSelectModal(prev => ({ ...prev, isOpen: false }));
-        if (depSelectResolveRef.current) {
-            depSelectResolveRef.current(selectedIds);
-            depSelectResolveRef.current = null;
-        }
     };
 
     const handleDepSelectCancel = () => {
         setDepSelectModal(prev => ({ ...prev, isOpen: false }));
-        if (depSelectResolveRef.current) {
-            depSelectResolveRef.current([]);
-            depSelectResolveRef.current = null;
-        }
     };
 
     // ─── Hooks ─────────────────────────────────────────────────────
@@ -224,7 +234,6 @@ const Mods: React.FC = () => {
     const {
         installedMods, setInstalledMods,
         installedSlugs, setInstalledSlugs,
-        isLoadingMods,
         saveInstalledMod,
     } = useInstalledMods(targetInstanceId);
 
@@ -267,8 +276,7 @@ const Mods: React.FC = () => {
         installedMods,
     });
 
-    const { isUpdatingAll, handleUpdateAll, verifyDependencies } = useModUpdates({
-        items,
+    const { isUpdatingAll, handleUpdateAll, verifyDependencies, checkedCount, totalToCheck } = useModUpdates({
         installedMods,
         installedSlugs,
         filterVersion,
@@ -277,12 +285,8 @@ const Mods: React.FC = () => {
         updatesAvailable,
         setUpdatesAvailable,
         handleInstall,
-        installModrinth,
-        installCurseForge,
         setVerificationStatus,
-        showConfirmAsync,
-        showDependencySelectAsync,
-        setTargetInstanceId,
+        setIsCheckingUpdates,
     });
 
     // ─── Effects ───────────────────────────────────────────────────
@@ -342,11 +346,12 @@ const Mods: React.FC = () => {
     // ─── Derived ───────────────────────────────────────────────────
 
     const getTargetInstanceName = () => {
-        return instances.find(i => i.id === targetInstanceId)?.name || "Seleccionar Instancia";
+        return instances.find(i => i.id === targetInstanceId)?.name || t('selectInstancePlaceholder');
     };
 
     const targetInstance = instances.find(i => i.id === targetInstanceId);
     const filteredItems = items.filter(item => searchType !== 'updates' || updatesAvailable.get(item.id));
+    console.log("DEBUG filteredItems:", filteredItems.length, "items:", items.length, "searchType:", searchType, "isLoading:", isLoading);
 
     const handleSearch = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -377,11 +382,18 @@ const Mods: React.FC = () => {
                             {t('modpacks')}
                         </button>
                         <button
-                            onClick={() => setSearchType('updates')}
-                            className={cn(styles.switchButton, searchType === 'updates' && styles.switchButtonActive)}
+                            onClick={() => setSearchType('shaders')}
+                            className={cn(styles.switchButton, searchType === 'shaders' && styles.switchButtonActive)}
                         >
-                            <RefreshCw size={16} />
-                            {t('updates')}
+                            <Sparkles size={16} />
+                            {t('shaders')}
+                        </button>
+                        <button
+                            onClick={() => setSearchType('texture_packs')}
+                            className={cn(styles.switchButton, searchType === 'texture_packs' && styles.switchButtonActive)}
+                        >
+                            <Palette size={16} />
+                            {t('texturePacks')}
                         </button>
                     </div>
 
@@ -392,39 +404,39 @@ const Mods: React.FC = () => {
                                 onClick={() => setActiveSource('modrinth')}
                                 className={cn(styles.switchButton, activeSource === 'modrinth' && styles.sourceButtonModrinth)}
                             >
-                                Modrinth
+                                {t('modrinth')}
                             </button>
                             <button
                                 onClick={() => setActiveSource('curseforge')}
                                 className={cn(styles.switchButton, activeSource === 'curseforge' && styles.sourceButtonCurseforge)}
                             >
-                                CurseForge
+                                {t('curseforge')}
                             </button>
                             {searchType === 'modpacks' && (
                                 <button
                                     onClick={() => setActiveSource('porcos')}
                                     className={cn(styles.switchButton, activeSource === 'porcos' && styles.sourceButtonPorcos)}
                                 >
-                                    Porcos
+                                    {t('porcos')}
                                 </button>
                             )}
                         </div>
                     )}
                 </div>
 
-                {/* Bottom Row: Instance Selector (Only for Mods) */}
-                {(searchType === 'mods' || searchType === 'updates') && (
+                {/* Bottom Row: Instance Selector & Actions */}
+                {(searchType === 'mods' || searchType === 'shaders' || searchType === 'texture_packs' || searchType === 'updates') && (
                     <div className={styles.controlsRow}>
                         <span className={styles.label}>{t('installIn')}</span>
                         <div className={styles.instanceSelectorWrapper}>
-                            <button 
+                            <button
                                 className={styles.instanceSelector}
                                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                             >
                                 <span className="truncate">{getTargetInstanceName()}</span>
                                 <ChevronDown size={14} />
                             </button>
-                            
+
                             {/* Dropdown */}
                             <div className={cn(styles.dropdown, isDropdownOpen && styles.dropdownOpen)}>
                                 {instances.map(instance => (
@@ -456,7 +468,7 @@ const Mods: React.FC = () => {
                                 icon={<Gamepad2 size={16} className="text-[#a1a1aa]" />}
                             />
                         )}
-                        
+
                         {/* Active Filters Badge */}
                         {!(searchType === 'mods' && targetInstance?.versions && targetInstance.versions.length > 1) && (filterVersion || filterLoader) && (
                             <div className={styles.filterBadge}>
@@ -466,40 +478,59 @@ const Mods: React.FC = () => {
                                 </span>
                             </div>
                         )}
+                    </div>
+                )}
 
-                        {/* Update All Button */}
-                        {searchType === 'updates' && items.filter(item => updatesAvailable.get(item.id)).length > 0 && (
-                            <button 
-                                onClick={handleUpdateAll}
-                                disabled={isUpdatingAll}
-                                className={styles.updateAllButton}
-                            >
-                                {isUpdatingAll ? (
+                {/* Action Buttons Bar */}
+                {searchType === 'mods' && (
+                    <div className={styles.actionsBar}>
+                        <div className={styles.actionsBarSpacer} />
+                        <button
+                            onClick={() => setShowUpdatesModal(true)}
+                            disabled={isCheckingUpdates && totalToCheck === 0}
+                            className={cn(styles.actionButton, styles.actionButtonUpdate, !isCheckingUpdates && updatesAvailable.size === 0 && styles.actionButtonDisabled)}
+                        >
+                            {isCheckingUpdates ? (
+                                <>
                                     <Loader2 className="animate-spin" size={14} />
-                                ) : (
+                                    {totalToCheck > 0 ? `${checkedCount}/${totalToCheck}` : t('checkingUpdates')}
+                                </>
+                            ) : (
+                                <>
                                     <RefreshCw size={14} />
-                                )}
-                                {isUpdatingAll ? t('updating') : `${t('updateAll')} (${items.filter(item => updatesAvailable.get(item.id)).length})`}
-                            </button>
-                        )}
-
-                        {/* Verify Dependencies Button */}
-                        {searchType === 'mods' && (
-                            <button 
-                                onClick={verifyDependencies}
-                                disabled={isUpdatingAll || isLoadingMods}
-                                className={styles.updateAllButton}
-                                title={isLoadingMods ? 'Cargando mods...' : t('verifyDependencies')}
-                                style={{ minWidth: '180px' }}
-                            >
-                                {isUpdatingAll || isLoadingMods ? (
+                                    {t('updatesAvailable', { count: updatesAvailable.size })}
+                                </>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => {
+                                setShowVerifyDepsModal(true);
+                                setMissingDeps([]);
+                                if (!isVerifyingDeps) {
+                                    setIsVerifyingDeps(true);
+                                    verifyDependencies().then(result => {
+                                        setIsVerifyingDeps(false);
+                                        if (result.success) {
+                                            setMissingDeps([]);
+                                        } else if (result.deps && result.deps.length > 0) {
+                                            setMissingDeps(result.deps);
+                                        }
+                                    });
+                                }
+                            }}
+                            disabled={isVerifyingDeps}
+                            className={cn(styles.actionButton, styles.actionButtonVerify)}
+                        >
+                            {isVerifyingDeps ? (
+                                <>
                                     <Loader2 className="animate-spin" size={14} />
-                                ) : (
-                                    <ShieldCheck size={14} />
-                                )}
-                                {isLoadingMods ? 'Cargando mods...' : verificationStatus ? verificationStatus : (isUpdatingAll ? t('updating') : t('verifyDependencies'))}
-                            </button>
-                        )}
+                                    {t('verifying')}
+                                </>
+                            ) : (
+                                <ShieldCheck size={14} />
+                            )}
+                            {t('verifyDependencies')}
+                        </button>
                     </div>
                 )}
 
@@ -520,10 +551,10 @@ const Mods: React.FC = () => {
                             value={filterLoader}
                             onChange={setFilterLoader}
                             options={[
-                                { value: "forge", label: "Forge" },
-                                { value: "fabric", label: "Fabric" },
-                                { value: "quilt", label: "Quilt" },
-                                { value: "neoforge", label: "NeoForge" }
+                                { value: "forge", label: t('forge') },
+                                { value: "fabric", label: t('fabric') },
+                                { value: "quilt", label: t('quilt') },
+                                { value: "neoforge", label: t('neoforge') }
                             ]}
                             placeholder={t('anyLoader')}
                             icon={<Cpu size={16} className="text-[#a1a1aa]" />}
@@ -553,6 +584,88 @@ const Mods: React.FC = () => {
                                     {t(cat.nameKey as any)}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+                )}
+
+                {(searchType === 'shaders') && activeSource !== 'porcos' && (isLoading || items.length > 0) && (
+                    <div className={styles.sidebar}>
+                        <h3 className={styles.categoryTitle}>{t('categories')}</h3>
+                        <div className={styles.categoryList}>
+                            <button
+                                onClick={() => setFilterCategory('')}
+                                className={cn(styles.categoryButton, !filterCategory && styles.categoryButtonActive)}
+                            >
+                                {t('allCategories')}
+                            </button>
+                            {['category', 'feature', 'loader', 'performance'].map(section => {
+                                const isCollapsed = collapsedSections.has(section);
+                                return (
+                                    <div key={section} className={styles.accordionItem}>
+                                        <button
+                                            className={styles.accordionHeader}
+                                            onClick={() => toggleSection(section)}
+                                        >
+                                            <span className={styles.accordionTitle}>{t('cat' + section.charAt(0).toUpperCase() + section.slice(1) as any)}</span>
+                                            <ChevronDown size={14} className={cn(styles.accordionChevron, isCollapsed && styles.accordionChevronCollapsed)} />
+                                        </button>
+                                        {!isCollapsed && (
+                                            <div className={styles.accordionContent}>
+                                                {SHADER_CATEGORIES.filter(cat => cat.section === section).map(cat => (
+                                                    <button
+                                                        key={cat.id}
+                                                        onClick={() => setFilterCategory(cat.id)}
+                                                        className={cn(styles.categoryButton, filterCategory === cat.id && styles.categoryButtonActive)}
+                                                    >
+                                                        {t(cat.nameKey as any)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {(searchType === 'texture_packs') && activeSource !== 'porcos' && (isLoading || items.length > 0) && (
+                    <div className={styles.sidebar}>
+                        <h3 className={styles.categoryTitle}>{t('categories')}</h3>
+                        <div className={styles.categoryList}>
+                            <button
+                                onClick={() => setFilterCategory('')}
+                                className={cn(styles.categoryButton, !filterCategory && styles.categoryButtonActive)}
+                            >
+                                {t('allCategories')}
+                            </button>
+                            {['resolution', 'style', 'feature'].map(section => {
+                                const isCollapsed = collapsedSections.has(section);
+                                return (
+                                    <div key={section} className={styles.accordionItem}>
+                                        <button
+                                            className={styles.accordionHeader}
+                                            onClick={() => toggleSection(section)}
+                                        >
+                                            <span className={styles.accordionTitle}>{section === 'resolution' ? t('catResolutionHeader') : t('cat' + section.charAt(0).toUpperCase() + section.slice(1) as any)}</span>
+                                            <ChevronDown size={14} className={cn(styles.accordionChevron, isCollapsed && styles.accordionChevronCollapsed)} />
+                                        </button>
+                                        {!isCollapsed && (
+                                            <div className={styles.accordionContent}>
+                                                {RESOURCE_PACK_CATEGORIES.filter(cat => cat.section === section).map(cat => (
+                                                    <button
+                                                        key={cat.id}
+                                                        onClick={() => setFilterCategory(cat.id)}
+                                                        className={cn(styles.categoryButton, filterCategory === cat.id && styles.categoryButtonActive)}
+                                                    >
+                                                        {t(cat.nameKey as any)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
@@ -589,114 +702,34 @@ const Mods: React.FC = () => {
                             <div className={styles.grid}>
                                 {filteredItems.map((item) => {
                                     const isInstalled = installedMods.has(item.id) || (item.original?.slug && installedSlugs.has(item.original.slug.toLowerCase()));
-                                    const hasUpdate = updatesAvailable.get(item.id);
-                                    
+                                    const hasUpdate = !!updatesAvailable.get(item.id);
+                                    const installedMod = installedMods.get(item.id);
+                                    const isEnabled = !installedMod?.file?.endsWith('.disabled');
+
                                     return (
-                                        <motion.div
+                                        <ModCard
                                             key={item.id}
-                                            initial={{ opacity: 0, y: 20 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className={styles.card}
-                                            onClick={() => {
-                                                setSelectedItem(item);
-                                            }}
-                                            style={{ cursor: 'pointer' }}
-                                        >
-                                            {/* Icon */}
-                                            <div className={styles.cardIcon}>
-                                                {item.icon ? (
-                                                    <img src={item.icon} alt={item.name} />
-                                                ) : (
-                                                    <div>
-                                                        <Package size={32} />
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Info */}
-                                            <div className={styles.cardInfo}>
-                                                <div className={styles.cardHeader}>
-                                                    <h3 className={styles.cardTitle}>{item.name}</h3>
-                                                    <span className={styles.cardAuthor}>by {item.author}</span>
-                                                </div>
-                                                <p className={styles.cardDesc}>{item.description}</p>
-                                                <div className={styles.cardStats}>
-                                                    <span className={styles.statItem}>
-                                                        <Download size={12} />
-                                                        {item.downloads}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Actions */}
-                                            <div className="flex items-center gap-1">
-                                                {/* Toggle / Uninstall buttons — only for installed mods */}
-                                                {isInstalled && searchType !== 'modpacks' && (
-                                                    <>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleToggleMod(item);
-                                                            }}
-                                                            className="p-2 rounded-lg transition-colors hover:bg-white/10 text-[#a1a1aa] hover:text-yellow-400"
-                                                            title={installedMods.get(item.id)?.file?.endsWith('.disabled') ? 'Activar mod' : 'Desactivar mod'}
-                                                        >
-                                                            <Power size={16} className={installedMods.get(item.id)?.file?.endsWith('.disabled') ? 'text-yellow-500' : ''} />
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleUninstall(item);
-                                                            }}
-                                                            className="p-2 rounded-lg transition-colors hover:bg-red-500/20 text-[#a1a1aa] hover:text-red-400"
-                                                            title="Desinstalar mod"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </>
-                                                )}
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleInstall(item);
-                                                    }}
-                                                    disabled={installingModId === item.id || (isInstalled && !hasUpdate && searchType === 'mods')}
-                                                    className={cn(
-                                                        styles.installButton,
-                                                        searchType === 'modpacks' ? styles.installButtonModpacks : styles.installButtonMods,
-                                                        isInstalled && !hasUpdate && searchType === 'mods' && "opacity-50 cursor-not-allowed bg-green-500/20 text-green-400",
-                                                        isInstalled && hasUpdate && searchType === 'mods' && "bg-[#ffbfba]/20 text-[#ffbfba] hover:bg-[#ffbfba]/30 border-[#ffbfba]/30",
-                                                        installedMods.get(item.id)?.file?.endsWith('.disabled') && "opacity-50"
-                                                    )}
-                                                >
-                                                    {installingModId === item.id ? (
-                                                        <Loader2 className="animate-spin" size={18} />
-                                                    ) : searchType === 'modpacks' ? (
-                                                        <>
-                                                            <Plus size={18} />
-                                                            {t('createInstanceFromModpack')}
-                                                        </>
-                                                    ) : isInstalled ? (
-                                                        hasUpdate ? (
-                                                            <>
-                                                                <Download size={18} />
-                                                                {t('update')}
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Check size={18} />
-                                                                {installedMods.get(item.id)?.file?.endsWith('.disabled') ? 'Desactivado' : t('installed')}
-                                                            </>
-                                                        )
-                                                    ) : (
-                                                        <>
-                                                            <Download size={18} />
-                                                            {t('install')}
-                                                        </>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </motion.div>
+                                            id={item.id}
+                                            name={item.name}
+                                            description={item.description}
+                                            author={item.author}
+                                            icon={item.icon}
+                                            downloads={item.downloads}
+                                            source={item.source as any}
+                                            version={installedMod?.version}
+                                            hasUpdate={hasUpdate}
+                                            updateInfo={hasUpdate ? {
+                                                currentVersion: installedMod?.version || 'unknown',
+                                                newVersion: updatesAvailable.get(item.id)?.newVersion || '?',
+                                            } : undefined}
+                                            isInstalled={isInstalled}
+                                            isEnabled={isEnabled}
+                                            isInstalling={installingModId === item.id}
+                                            onSelect={() => setSelectedItem(item)}
+                                            onInstall={() => handleInstall(item)}
+                                            onUninstall={() => handleUninstall(item)}
+                                            onToggle={() => handleToggleMod(item)}
+                                        />
                                     );
                                 })}
                             </div>
@@ -764,7 +797,7 @@ const Mods: React.FC = () => {
                         onInstall={(item, version) => handleInstall(item, version)}
                         isInstalling={installingModId === selectedItem.id}
                         isInstalled={installedMods.has(selectedItem.id) || (selectedItem.original?.slug && installedSlugs.has(selectedItem.original.slug))}
-                        hasUpdate={updatesAvailable.get(selectedItem.id) || false}
+                        hasUpdate={!!updatesAvailable.get(selectedItem.id)}
                         type={searchType}
                         gameVersion={filterVersion}
                         loader={filterLoader}
@@ -787,6 +820,86 @@ const Mods: React.FC = () => {
                 danger={confirmModal.danger}
                 onConfirm={confirmModal.onConfirm}
                 onCancel={handleConfirmCancel}
+            />
+
+            <UpdatesModal
+                isOpen={showUpdatesModal}
+                onClose={() => setShowUpdatesModal(false)}
+                updates={new Map(Array.from(updatesAvailable.entries()).map(([id, info]) => [id, {
+                    id,
+                    name: info.name || id,
+                    icon: info.icon,
+                    source: (info.source || 'local') as any,
+                    currentVersion: info.currentVersion,
+                    newVersion: info.newVersion,
+                }]))}
+                onUpdate={(id) => {
+                    const info = updatesAvailable.get(id);
+                    if (info) {
+                        const source = info.source === 'curseforge' ? 'curseforge' : 'modrinth';
+                        const versionId = info.newVersion;
+                        handleInstall({ id, source, versionId } as any, versionId);
+                    }
+                }}
+                onUpdateAll={handleUpdateAll}
+                onDismiss={(id) => {
+                    setUpdatesAvailable(prev => {
+                        const next = new Map(prev);
+                        next.delete(id);
+                        return next;
+                    });
+                }}
+                isUpdatingAll={isUpdatingAll}
+            />
+
+            <VerifyDepsModal
+                isOpen={showVerifyDepsModal}
+                onClose={() => {
+                    setShowVerifyDepsModal(false);
+                    setMissingDeps([]);
+                    setIsVerifyingDeps(false);
+                }}
+                isVerifying={isVerifyingDeps}
+                status={verificationStatus}
+                deps={missingDeps}
+                isInstalling={isInstallingDeps}
+                installStatus={installStatus}
+                onStartVerify={async () => {
+                    setIsVerifyingDeps(true);
+                    const result = await verifyDependencies();
+                    setIsVerifyingDeps(false);
+                    if (result.success) {
+                        setMissingDeps([]);
+                    } else if (result.deps && result.deps.length > 0) {
+                        setMissingDeps(result.deps);
+                    }
+                }}
+                onInstallDeps={async (selectedIds) => {
+                    setIsInstallingDeps(true);
+                    setInstallStatus(t('installing'));
+                    let installedCount = 0;
+                    for (let i = 0; i < selectedIds.length; i++) {
+                        const dep = missingDeps.find(d => d.id === selectedIds[i]);
+                        if (!dep) continue;
+                        setInstallStatus(t('installingProgress', { current: i + 1, total: selectedIds.length }));
+                        try {
+                            if (dep.source === 'modrinth') {
+                                await installModrinth(dep.id, filterVersion, filterLoader, targetInstanceId, new Set(), undefined, true);
+                            } else {
+                                await installCurseForge(dep.id, filterVersion, filterLoader, targetInstanceId, new Set(), undefined, true);
+                            }
+                            installedCount++;
+                        } catch (e) {
+                            console.error('Failed to install dep:', dep.id, e);
+                        }
+                    }
+                    setIsInstallingDeps(false);
+                    setInstallStatus('');
+                    setMissingDeps([]);
+                    const currentId = targetInstanceId;
+                    setTargetInstanceId('');
+                    setTimeout(() => setTargetInstanceId(currentId), 50);
+                }}
             />
         </div>
     );

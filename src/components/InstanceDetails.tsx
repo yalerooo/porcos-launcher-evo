@@ -1,13 +1,18 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Folder, ArrowLeft, Package, Map, Trash2, FileQuestion, Search, Download, Eye, X, FileText, Settings } from 'lucide-react';
+import { FixedSizeList as List } from 'react-window';
+import { Play, Folder, ArrowLeft, Package, Map, Trash2, FileQuestion, Search, Download, Eye, X, FileText, Settings, Terminal, ChevronDown, ChevronUp, Clock } from 'lucide-react';
 import { Instance, getCachedImages } from '@/stores/launcherStore';
 import { cn } from '@/lib/utils';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { join } from '@tauri-apps/api/path';
 import { useI18n } from '@/i18n';
+import { formatPlayTime, formatTimeAgo } from '@/lib/timeFormat';
 import styles from './InstanceDetails.module.css';
+
+const LINE_HEIGHT = 22;
+const OVERSCAN_COUNT = 5;
 
 interface InstanceDetailsProps {
     instance: Instance;
@@ -17,7 +22,7 @@ interface InstanceDetailsProps {
     isLaunching: boolean;
 }
 
-type Tab = 'Content' | 'Logs' | 'Saves' | 'Screenshots' | 'Console';
+type Tab = 'Content' | 'Logs' | 'Saves' | 'Screenshots' | 'Shaderpacks' | 'Resourcepacks' | 'Console';
 
 const ScreenshotItem = ({ file, instancePath, onDelete, onClick }: { file: {name: string}, instancePath: string, onDelete: (name: string) => void, onClick: (url: string) => void }) => {
     const [imageUrl, setImageUrl] = React.useState<string | null>(null);
@@ -64,15 +69,32 @@ const ScreenshotItem = ({ file, instancePath, onDelete, onClick }: { file: {name
     );
 };
 
-const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {name: string, is_dir: boolean}, instancePath: string, activeTab: string, onDelete: (name: string) => void, onClick?: (file: {name: string}) => void }) => {
+const FileRow = ({ file, instancePath, activeTab, onDelete, onClick, installedMetadata }: { file: {name: string, is_dir: boolean}, instancePath: string, activeTab: string, onDelete: (name: string) => void, onClick?: (file: {name: string}) => void, installedMetadata?: Record<string, {name?: string, icon?: string, source?: string}> }) => {
     const { t } = useI18n();
     const [iconUrl, setIconUrl] = React.useState<string | null>(null);
+
+    const metadata = installedMetadata?.[file.name];
 
     React.useEffect(() => {
         let isMounted = true;
         let currentUrl: string | null = null;
 
         const loadIcon = async () => {
+            // For shaderpacks and resourcepacks, first check if we have metadata from mods.json
+            if ((activeTab === 'Shaderpacks' || activeTab === 'Resourcepacks') && metadata?.icon && instancePath) {
+                try {
+                    const response = await invoke('fetch_cors', { url: metadata.icon }) as string;
+                    if (isMounted && response) {
+                        const blob = new Blob([new Uint8Array([...response].map(c => c.charCodeAt(0)))], { type: 'image/png' });
+                        currentUrl = URL.createObjectURL(blob);
+                        setIconUrl(currentUrl);
+                        return;
+                    }
+                } catch (e) {
+                    // Failed to load icon from URL
+                }
+            }
+
             if (activeTab === 'Content' && file.name.endsWith('.jar') && instancePath) {
                 try {
                     const targetDir = 'mods';
@@ -98,14 +120,38 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
                 } catch (e) {
                     // Icon not found
                 }
+            } else if (activeTab === 'Shaderpacks' && instancePath) {
+                try {
+                    const fullPath = await join(instancePath, 'shaderpacks', file.name);
+                    const data = await invoke('get_mod_icon', { path: fullPath }) as number[];
+                    if (isMounted && data && data.length > 0) {
+                        const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
+                        currentUrl = URL.createObjectURL(blob);
+                        setIconUrl(currentUrl);
+                    }
+                } catch (e) {
+                    // No icon available
+                }
+            } else if (activeTab === 'Resourcepacks' && instancePath) {
+                try {
+                    const fullPath = await join(instancePath, 'resourcepacks', file.name);
+                    const data = await invoke('get_mod_icon', { path: fullPath }) as number[];
+                    if (isMounted && data && data.length > 0) {
+                        const blob = new Blob([new Uint8Array(data)], { type: 'image/png' });
+                        currentUrl = URL.createObjectURL(blob);
+                        setIconUrl(currentUrl);
+                    }
+                } catch (e) {
+                    // No icon available
+                }
             }
         };
         loadIcon();
-        return () => { 
+        return () => {
             isMounted = false;
             if (currentUrl) URL.revokeObjectURL(currentUrl);
         };
-    }, [file, instancePath, activeTab]);
+    }, [file, instancePath, activeTab, metadata]);
 
 
     return (
@@ -119,6 +165,10 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
                         file.name.endsWith('.jar') ? <Package className="w-8 h-8 text-[#ffbfba]" /> : <FileQuestion className="w-8 h-8 text-zinc-500" />
                     ) : activeTab === 'Logs' ? (
                         <FileText className="w-8 h-8 text-zinc-400" />
+                    ) : activeTab === 'Shaderpacks' ? (
+                        <Folder className="w-8 h-8 text-purple-400" />
+                    ) : activeTab === 'Resourcepacks' ? (
+                        <Folder className="w-8 h-8 text-amber-400" />
                     ) : (
                         <Map className="w-8 h-8 text-emerald-400" />
                     )
@@ -128,17 +178,19 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
             {/* Info */}
             <div className={styles.fileInfo}>
                 <div className={styles.fileHeader}>
-                    <h3 className={styles.fileName} title={file.name}>
-                        {file.name}
+                    <h3 className={styles.fileName} title={metadata?.name || file.name}>
+                        {metadata?.name || file.name}
                     </h3>
-                    <span className={styles.fileTag}>
-                        Local File
-                    </span>
+                    {metadata?.source && (
+                        <span className={styles.fileTag} style={{ textTransform: 'capitalize' }}>
+                            {metadata.source}
+                        </span>
+                    )}
                 </div>
                 <p className={styles.fileDescription}>
-                    {activeTab === 'Content' ? 'Mod file installed in instance.' : (activeTab === 'Logs' ? 'Log file.' : 'World save folder.')}
+                    {activeTab === 'Content' ? 'Mod file installed in instance.' : (activeTab === 'Logs' ? 'Log file.' : (activeTab === 'Shaderpacks' ? 'Shaderpack installed.' : (activeTab === 'Resourcepacks' ? 'Resourcepack installed.' : 'World save folder.')))}
                 </p>
-                {activeTab === 'Content' && (
+                {(activeTab === 'Content' || activeTab === 'Shaderpacks' || activeTab === 'Resourcepacks') && (
                     <div className={styles.fileMeta}>
                         <Download className="w-3 h-3" />
                         <span>Installed</span>
@@ -158,6 +210,46 @@ const FileRow = ({ file, instancePath, activeTab, onDelete, onClick }: { file: {
     );
 };
 
+interface LogRow {
+    timestamp: string;
+    message: string;
+    level: 'info' | 'warn' | 'error' | 'debug';
+}
+
+interface RowData {
+    logs: LogRow[];
+}
+
+interface RowProps {
+    index: number;
+    style: React.CSSProperties;
+    data: RowData;
+}
+
+const ConsoleLogRow: React.FC<RowProps> = React.memo(({ index, style, data }) => {
+    const log = data.logs[index];
+    const levelColors = {
+        info: 'text-[#e8d5d3]',
+        warn: 'text-amber-400/90',
+        error: 'text-red-400/90',
+        debug: 'text-zinc-500',
+    };
+    const bgTint = {
+        info: '',
+        warn: 'bg-amber-500/5',
+        error: 'bg-red-500/5',
+        debug: '',
+    };
+    return (
+        <div style={style} className={cn("break-all group flex font-mono text-xs relative", levelColors[log.level], bgTint[log.level])}>
+            <span className="text-zinc-600/70 mr-3 ml-2 flex-shrink-0 select-none font-light text-[10px] mt-[1px]">{log.timestamp}</span>
+            <span className="flex-1 py-[3px] pr-4 border-l border-zinc-800/50 group-hover:border-[#ffbfba]/20 transition-colors">{log.message}</span>
+        </div>
+    );
+});
+
+ConsoleLogRow.displayName = 'ConsoleLogRow';
+
 const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onPlay, onOpenSettings, isLaunching }) => {
     const { t } = useI18n();
     // Get cached images from global store
@@ -171,8 +263,12 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
     const [selectedScreenshot, setSelectedScreenshot] = React.useState<string | null>(null);
     const [selectedLog, setSelectedLog] = React.useState<{name: string, content: string} | null>(null);
     const [consoleLogs, setConsoleLogs] = React.useState<string[]>([]);
-    const consoleEndRef = React.useRef<HTMLDivElement>(null);
-    
+    const [autoScroll, setAutoScroll] = React.useState(true);
+    const consoleContainerRef = React.useRef<HTMLDivElement>(null);
+    const consoleListRef = React.useRef<List>(null);
+    const prevLogCountRef = React.useRef(0);
+    const [installedMetadata, setInstalledMetadata] = React.useState<Record<string, {name?: string, icon?: string, source?: string}>>({});
+
     // Pagination & Search
     const [currentPage, setCurrentPage] = React.useState(1);
     const [searchQuery, setSearchQuery] = React.useState("");
@@ -184,6 +280,17 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
             scrollContainerRef.current.scrollTop = 0;
         }
     }, [currentPage]);
+
+    const parsedConsoleLogs: LogRow[] = consoleLogs.map(line => {
+        const timestampMatch = line.match(/^\[(\d{2}:\d{2}:\d{2})\]/);
+        const timestamp = timestampMatch ? timestampMatch[1] : '';
+        const message = timestampMatch ? line.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*/, '') : line;
+        let level: 'info' | 'warn' | 'error' | 'debug' = 'info';
+        if (/\berror\b/i.test(message)) level = 'error';
+        else if (/\bwarn(?:ing)?\b/i.test(message)) level = 'warn';
+        else if (/\b(?:debug|trace)\b/i.test(message)) level = 'debug';
+        return { timestamp, message, level };
+    });
 
     React.useEffect(() => {
         const unlisten = listen('game-output', (event) => {
@@ -197,13 +304,22 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
     }, []);
 
     React.useEffect(() => {
-        if (activeTab === 'Console' && consoleEndRef.current) {
-            consoleEndRef.current.scrollIntoView({ behavior: "smooth" });
+        if (parsedConsoleLogs.length > prevLogCountRef.current) {
+            prevLogCountRef.current = parsedConsoleLogs.length;
+            if (autoScroll && consoleListRef.current) {
+                consoleListRef.current.scrollToItem(parsedConsoleLogs.length - 1, 'end');
+            }
         }
-    }, [consoleLogs, activeTab]);
+    }, [parsedConsoleLogs.length, autoScroll]);
+
+    const handleConsoleScroll = useCallback(({ scrollOffset, scrollUpdateWasRequested }: { scrollOffset: number; scrollUpdateWasRequested: boolean }) => {
+        if (scrollUpdateWasRequested || !consoleContainerRef.current) return;
+        const maxScroll = consoleContainerRef.current.scrollHeight - consoleContainerRef.current.clientHeight;
+        setAutoScroll(maxScroll - scrollOffset < 50);
+    }, []);
 
     React.useEffect(() => {
-        if (activeTab === 'Content' || activeTab === 'Saves' || activeTab === 'Screenshots' || activeTab === 'Logs') {
+        if (activeTab === 'Content' || activeTab === 'Saves' || activeTab === 'Screenshots' || activeTab === 'Logs' || activeTab === 'Shaderpacks' || activeTab === 'Resourcepacks') {
             loadFiles();
         }
     }, [activeTab, instance]);
@@ -215,9 +331,30 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
         try {
             const path = await invoke("get_instance_path", { id: instance.id }) as string;
             setInstancePath(path);
-            const targetDir = activeTab === 'Content' ? 'mods' : (activeTab === 'Saves' ? 'saves' : (activeTab === 'Screenshots' ? 'screenshots' : 'logs'));
+            const targetDir = activeTab === 'Content' ? 'mods' : (activeTab === 'Saves' ? 'saves' : (activeTab === 'Screenshots' ? 'screenshots' : (activeTab === 'Shaderpacks' ? 'shaderpacks' : (activeTab === 'Resourcepacks' ? 'resourcepacks' : 'logs'))));
             const fullPath = await join(path, targetDir);
-            
+
+            // Load metadata for shaderpacks/resourcepacks
+            if (activeTab === 'Shaderpacks' || activeTab === 'Resourcepacks') {
+                const metadataPath = await join(path, 'mods.json');
+                const metadataExists = await invoke("file_exists", { path: metadataPath }) as boolean;
+                if (metadataExists) {
+                    const content = await invoke("read_text_file", { path: metadataPath }) as string;
+                    const data = JSON.parse(content);
+                    if (data.mods && Array.isArray(data.mods)) {
+                        const metadataRecord: Record<string, {name?: string, icon?: string, source?: string}> = {};
+                        for (const mod of data.mods) {
+                            if (mod.file) {
+                                metadataRecord[mod.file] = { name: mod.name, icon: mod.icon, source: mod.source };
+                            }
+                        }
+                        setInstalledMetadata(metadataRecord);
+                    }
+                } else {
+                    setInstalledMetadata({});
+                }
+            }
+
             // Check if dir exists
             const exists = await invoke("file_exists", { path: fullPath }) as boolean;
             if (!exists) {
@@ -227,7 +364,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
             }
 
             const fileList = await invoke("list_files", { path: fullPath }) as {name: string, is_dir: boolean}[];
-            
+
             if (activeTab === 'Logs') {
                 const filtered = fileList.filter(f => f.name.endsWith('.log'));
                 setFiles(filtered);
@@ -249,7 +386,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
         if (cached.icon) setIconSrc(cached.icon);
     }, [instance.id, instance.icon, instance.backgroundImage]);
 
-    const tabs: Tab[] = ['Content', 'Logs', 'Saves', 'Screenshots', 'Console'];
+    const tabs: Tab[] = ['Content', 'Logs', 'Saves', 'Screenshots', 'Shaderpacks', 'Resourcepacks', 'Console'];
 
     const handleOpenFolder = async () => {
         try {
@@ -274,7 +411,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
     const handleDeleteFile = async (fileName: string) => {
         try {
             const instancePath = await invoke("get_instance_path", { id: instance.id }) as string;
-            const targetDir = activeTab === 'Content' ? 'mods' : (activeTab === 'Saves' ? 'saves' : (activeTab === 'Screenshots' ? 'screenshots' : 'logs'));
+            const targetDir = activeTab === 'Content' ? 'mods' : (activeTab === 'Saves' ? 'saves' : (activeTab === 'Screenshots' ? 'screenshots' : (activeTab === 'Shaderpacks' ? 'shaderpacks' : (activeTab === 'Resourcepacks' ? 'resourcepacks' : 'logs'))));
             const fullPath = await join(instancePath, targetDir, fileName);
             
             await invoke("delete_file", { path: fullPath });
@@ -363,6 +500,32 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                 {files.length} {t('files')}
                             </span>
                         </div>
+                        {(instance.totalPlayTime !== undefined && instance.totalPlayTime > 0) && (
+                            <div className="flex items-center gap-4 mt-2 text-[11px]" style={{ color: 'var(--ink-muted)' }}>
+                                <span className="flex items-center gap-1">
+                                    <Clock size={10} />
+                                    <span>{formatPlayTime(instance.totalPlayTime)} total</span>
+                                </span>
+                                {instance.longestSession !== undefined && instance.longestSession > 0 && (
+                                    <span className="flex items-center gap-1">
+                                        <span>·</span>
+                                        <span>{formatPlayTime(instance.longestSession)} máx</span>
+                                    </span>
+                                )}
+                                {instance.sessionCount !== undefined && instance.sessionCount > 0 && (
+                                    <span className="flex items-center gap-1">
+                                        <span>·</span>
+                                        <span>{instance.sessionCount} {instance.sessionCount === 1 ? 'sesión' : 'sesiones'}</span>
+                                    </span>
+                                )}
+                                {instance.lastPlayed && (
+                                    <span className="flex items-center gap-1 opacity-60">
+                                        <span>·</span>
+                                        <span>hace {formatTimeAgo(instance.lastPlayed)}</span>
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <button 
                         className={styles.playButton}
@@ -394,7 +557,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
 
             {/* Content Area */}
             <div className={styles.content}>
-                {(activeTab === 'Content' || activeTab === 'Saves' || activeTab === 'Screenshots' || activeTab === 'Logs') && (
+                {(activeTab === 'Content' || activeTab === 'Saves' || activeTab === 'Screenshots' || activeTab === 'Logs' || activeTab === 'Shaderpacks' || activeTab === 'Resourcepacks') && (
                     <div className={styles.filesContainer}>
                         {/* Search Bar */}
                         <div className={styles.searchBar}>
@@ -402,7 +565,7 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                                 <Search className="w-5 h-5 text-zinc-500" />
                                 <input 
                                     type="text" 
-                                    placeholder={activeTab === 'Content' ? t('searchInMods') : (activeTab === 'Saves' ? t('searchInWorlds') : (activeTab === 'Screenshots' ? t('searchInScreenshots') : t('searchInLogs')))}
+                                    placeholder={activeTab === 'Content' ? t('searchInMods') : (activeTab === 'Saves' ? t('searchInWorlds') : (activeTab === 'Screenshots' ? t('searchInScreenshots') : (activeTab === 'Shaderpacks' ? t('searchInShaderpacks') : (activeTab === 'Resourcepacks' ? t('searchInResourcepacks') : t('searchInLogs')))))}
                                     value={searchQuery}
                                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                     className={styles.searchInput}
@@ -420,13 +583,13 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                         ) : filteredFiles.length === 0 ? (
                             <div className={styles.emptyContainer}>
                                 <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-                                    {activeTab === 'Content' ? <Package className="w-8 h-8 opacity-50" /> : (activeTab === 'Saves' ? <Map className="w-8 h-8 opacity-50" /> : <Eye className="w-8 h-8 opacity-50" />)}
+                                    {activeTab === 'Content' ? <Package className="w-8 h-8 opacity-50" /> : (activeTab === 'Saves' ? <Map className="w-8 h-8 opacity-50" /> : (activeTab === 'Shaderpacks' || activeTab === 'Resourcepacks' ? <Folder className="w-8 h-8 opacity-50" /> : <Eye className="w-8 h-8 opacity-50" />))}
                                 </div>
                                 <p className="text-lg font-medium">
-                                    {searchQuery ? t('noResultsFound') : (activeTab === 'Content' ? t('noMods') : (activeTab === 'Saves' ? t('noSaves') : t('noScreenshots')))}
+                                    {searchQuery ? t('noResultsFound') : (activeTab === 'Content' ? t('noMods') : (activeTab === 'Saves' ? t('noSaves') : (activeTab === 'Screenshots' ? t('noScreenshots') : (activeTab === 'Shaderpacks' ? t('noShaderpacks') : t('noResourcepacks')))))}
                                 </p>
                                 <p className="text-sm opacity-60">
-                                    {searchQuery ? t('tryAnotherSearch') : t('folderEmpty')}
+                                    {searchQuery ? t('tryAnotherSearch') : (activeTab === 'Shaderpacks' ? t('noShaderpacksDesc') : (activeTab === 'Resourcepacks' ? t('noResourcepacksDesc') : t('folderEmpty')))}
                                 </p>
                             </div>
                         ) : activeTab === 'Screenshots' ? (
@@ -444,13 +607,14 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                         ) : (
                             <div className={styles.filesList} ref={scrollContainerRef}>
                                 {currentFiles.map((file, i) => (
-                                    <FileRow 
-                                        key={i} 
-                                        file={file} 
-                                        instancePath={instancePath} 
-                                        activeTab={activeTab} 
+                                    <FileRow
+                                        key={i}
+                                        file={file}
+                                        instancePath={instancePath}
+                                        activeTab={activeTab}
                                         onDelete={handleDeleteFile}
                                         onClick={activeTab === 'Logs' ? handleFileClick : undefined}
+                                        installedMetadata={(activeTab === 'Shaderpacks' || activeTab === 'Resourcepacks') ? installedMetadata : undefined}
                                     />
                                 ))}
                             </div>
@@ -482,12 +646,50 @@ const InstanceDetails: React.FC<InstanceDetailsProps> = ({ instance, onBack, onP
                 )}
                 {/* Placeholders for other tabs */}
                 {activeTab === 'Console' && (
-                    <div className={styles.consoleContainer}>
-                        <div className={styles.consoleOutput}>
-                            {consoleLogs.map((log, i) => (
-                                <div key={i} className={styles.consoleLine}>{log}</div>
-                            ))}
-                            <div ref={consoleEndRef} />
+                    <div className={styles.consoleWrapper}>
+                        <div className={styles.consoleHeader}>
+                            <div className={styles.consoleHeaderLeft}>
+                                <Terminal className="w-4 h-4 text-[#ffbfba]" />
+                                <span className={styles.consoleTitle}>{t('consoleTitle')}</span>
+                                <span className={styles.consoleCount}>({parsedConsoleLogs.length} lines)</span>
+                            </div>
+                            <div className={styles.consoleHeaderRight}>
+                                <button
+                                    onClick={() => { setConsoleLogs([]); setAutoScroll(true); }}
+                                    className={styles.consoleHeaderBtn}
+                                    title={t('clearLogs')}
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => { setAutoScroll(!autoScroll); if (!autoScroll && consoleListRef.current) consoleListRef.current.scrollToItem(parsedConsoleLogs.length - 1, 'end'); }}
+                                    className={cn(styles.consoleHeaderBtn, autoScroll && styles.consoleHeaderBtnActive)}
+                                    title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
+                                >
+                                    {autoScroll ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+                                </button>
+                            </div>
+                        </div>
+                        <div ref={consoleContainerRef} className={styles.consoleOutput}>
+                            {parsedConsoleLogs.length === 0 ? (
+                                <div className={styles.consoleEmpty}>
+                                    <Terminal className="w-8 h-8 opacity-30" />
+                                    <span>{t('waitingLogs')}</span>
+                                </div>
+                            ) : (
+                                <List
+                                    ref={consoleListRef}
+                                    height={consoleContainerRef.current?.clientHeight || 400}
+                                    width="100%"
+                                    itemCount={parsedConsoleLogs.length}
+                                    itemSize={LINE_HEIGHT}
+                                    itemData={{ logs: parsedConsoleLogs }}
+                                    overscanCount={OVERSCAN_COUNT}
+                                    onScroll={handleConsoleScroll}
+                                >
+                                    {ConsoleLogRow}
+                                </List>
+                            )}
                         </div>
                     </div>
                 )}

@@ -153,6 +153,10 @@ body {
   transform: translateZ(0);
 }
 
+.launcher-container[data-maximized="true"] {
+  border-radius: 0;
+}
+
 .sidebar {
   width: 260px;
   background: var(--bg-secondary);
