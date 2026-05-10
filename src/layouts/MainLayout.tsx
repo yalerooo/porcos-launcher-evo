@@ -3,8 +3,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Home, Box, Settings, Terminal, LogOut, Minus, X, AlertCircle, Square, Copy, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import styles from '../pages/Home.module.css';
-import { useLauncherStore } from '@/stores/launcherStore';
-import { listen } from '@tauri-apps/api/event';
 import { useI18n } from '@/i18n';
 import PlayerSkinPopover from '@/components/PlayerSkinPopover';
 
